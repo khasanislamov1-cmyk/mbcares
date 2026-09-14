@@ -3,18 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>MBCares · Контроль уборки</title>
+<title>MBCares · Чек-листы</title>
 <meta name="theme-color" content="#1F3864">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
   :root{
-    --navy:#1F3864; --blue:#4472C4; --bg:#F5F7FA; --card:#FFFFFF;
+    --navy:#1F3864; --blue:#4472C4; --gold:#B9862E; --bg:#F5F7FA; --card:#FFFFFF;
     --line:#E3E7EE; --text:#1B2430; --muted:#707A8A;
     --ok:#2E7D46; --ok-bg:#E2EFDA;
     --warn:#B98400; --warn-bg:#FFF2CC;
     --bad:#C00000; --bad-bg:#FFE2E2;
+    --accent:#4472C4;
     --radius:14px;
   }
   *{box-sizing:border-box;}
@@ -27,7 +28,6 @@
   }
   #app{max-width:560px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column;}
 
-  /* Top bar */
   .topbar{
     background:var(--navy); color:#fff; padding:14px 16px calc(14px + env(safe-area-inset-top));
     padding-top:calc(14px + env(safe-area-inset-top));
@@ -45,7 +45,16 @@
   .view{padding:16px; flex:1; display:none;}
   .view.active{display:block;}
 
-  /* Object select */
+  .role-list{display:flex; flex-direction:column; gap:10px; margin-top:6px;}
+  .role-item{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:18px; display:flex; align-items:center; gap:14px;
+  }
+  .role-item .ico{font-size:26px;}
+  .role-item .txt b{display:block; font-size:15px; color:var(--navy);}
+  .role-item .txt span{display:block; font-size:12.5px; color:var(--muted); margin-top:2px;}
+  .role-item.sel{outline:2px solid var(--accent);}
+
   .obj-list{display:flex; flex-direction:column; gap:10px; margin-top:6px;}
   .obj-item{
     background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
@@ -64,11 +73,10 @@
     padding:14px; font-size:15px; font-weight:600; margin-top:6px;
   }
   .primary-btn:active{background:#16294A;}
+  .primary-btn:disabled{opacity:.45;}
 
-  /* Calendar */
   .cal-head{display:flex; align-items:center; justify-content:space-between; margin:4px 0 14px;}
   .cal-head .month{font-size:17px; font-weight:700; color:var(--navy);}
-  .cal-nav{display:flex; gap:6px;}
   .cal-nav button{
     background:#fff; border:1px solid var(--line); width:34px; height:34px; border-radius:9px; font-size:15px; color:var(--navy);
   }
@@ -81,7 +89,7 @@
   }
   .cal-day.empty{background:transparent; border:none;}
   .cal-day .dot{width:7px; height:7px; border-radius:50%; margin-top:3px;}
-  .cal-day.today{border:2px solid var(--blue); font-weight:700;}
+  .cal-day.today{border:2px solid var(--accent); font-weight:700;}
   .cal-day.st-none .dot{background:#D5DAE2;}
   .cal-day.st-partial .dot{background:var(--warn);}
   .cal-day.st-done .dot{background:var(--ok);}
@@ -90,36 +98,35 @@
   .legend span{display:inline-flex; align-items:center; gap:6px;}
   .legend i{width:8px; height:8px; border-radius:50%; display:inline-block;}
 
-  /* Day / checklist view */
-  .day-header{
-    display:flex; align-items:center; gap:10px; margin-bottom:4px;
-  }
+  .day-header{display:flex; align-items:center; gap:10px; margin-bottom:4px;}
   .back-btn{background:none; border:none; color:var(--navy); font-size:20px; padding:4px 6px 4px 0;}
   .day-title{font-size:16px; font-weight:700; color:var(--navy);}
   .day-obj{font-size:12px; color:var(--muted);}
 
   .progress-wrap{margin:12px 0 14px;}
   .progress-bar{height:8px; background:var(--line); border-radius:6px; overflow:hidden;}
-  .progress-bar > div{height:100%; background:var(--blue); transition:width .25s;}
+  .progress-bar > div{height:100%; background:var(--accent); transition:width .25s;}
   .progress-label{font-size:12px; color:var(--muted); margin-top:5px;}
 
-  .tabs{display:flex; gap:6px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:4px; margin-bottom:16px;}
-  .tab{flex:1; text-align:center; padding:9px 4px; border-radius:9px; font-size:13px; font-weight:600; color:var(--muted);}
+  .tabs{display:flex; gap:5px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:4px; margin-bottom:16px; overflow-x:auto;}
+  .tab{flex:1; text-align:center; padding:9px 2px; border-radius:9px; font-size:12.5px; font-weight:700; color:var(--muted); white-space:nowrap;}
   .tab.active{background:var(--navy); color:#fff;}
+  .tab .dot-mini{display:inline-block; width:6px; height:6px; border-radius:50%; margin-left:4px; vertical-align:middle;}
+
+  .time-field{
+    display:flex; align-items:center; gap:10px; background:#fff; border:1px solid var(--line);
+    border-radius:var(--radius); padding:12px 14px; margin-bottom:14px;
+  }
+  .time-field label{font-size:13px; color:var(--muted); flex:1;}
+  .time-field input{border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:14px; width:110px; font-family:inherit;}
 
   .section{margin-bottom:14px; background:#fff; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
-  .section-head{
-    padding:12px 14px; background:#EEF2F8; color:var(--navy); font-size:13px; font-weight:700;
-    display:flex; align-items:center; justify-content:space-between;
-  }
-  .section-head .count{font-weight:500; color:var(--muted); font-size:12px;}
+  .section-head{padding:12px 14px; background:#EEF2F8; color:var(--navy); font-size:13px; font-weight:700;}
   .item{padding:12px 14px; border-top:1px solid var(--line);}
   .item-text{font-size:13.5px; line-height:1.4; margin-bottom:9px;}
   .seg{display:flex; gap:6px;}
-  .seg button{
-    flex:1; padding:9px 0; border-radius:9px; border:1px solid var(--line); background:#fff; font-size:15px;
-  }
-  .seg button.sel-ok{background:var(--ok-bg); border-color:var(--ok); }
+  .seg button{flex:1; padding:9px 0; border-radius:9px; border:1px solid var(--line); background:#fff; font-size:15px;}
+  .seg button.sel-ok{background:var(--ok-bg); border-color:var(--ok);}
   .seg button.sel-warn{background:var(--warn-bg); border-color:var(--warn);}
   .seg button.sel-bad{background:var(--bad-bg); border-color:var(--bad);}
   .comment{
@@ -136,9 +143,7 @@
   }
   .save-flag.show{opacity:1;}
 
-  .done-btn{
-    position:sticky; bottom:0; background:var(--bg); padding:12px 0 6px; margin-top:8px;
-  }
+  .done-btn{position:sticky; bottom:0; background:var(--bg); padding:12px 0 6px; margin-top:8px;}
 </style>
 </head>
 <body>
@@ -146,10 +151,10 @@
 
   <div class="topbar">
     <div>
-      <h1 id="topTitle">MBCares · Контроль уборки</h1>
+      <h1 id="topTitle">MBCares</h1>
       <div class="sub" id="topSub"></div>
     </div>
-    <button class="iconbtn" id="objSwitchBtn" title="Сменить объект">⇄</button>
+    <button class="iconbtn" id="switchBtn" title="Сменить должность/объект">⇄</button>
   </div>
 
   <!-- ONBOARDING -->
@@ -158,8 +163,13 @@
       <label>Ваше имя</label>
       <input id="nameInput" type="text" placeholder="Например: Гулноза">
     </div>
-    <div class="subhead" style="margin-top:20px;">Выберите объект (ЖК)</div>
+
+    <div class="subhead" style="margin-top:20px;">Ваша должность</div>
+    <div class="role-list" id="roleList"></div>
+
+    <div class="subhead" style="margin-top:20px;">Объект (ЖК)</div>
     <div class="obj-list" id="objList"></div>
+
     <button class="primary-btn" id="continueBtn" style="margin-top:18px;">Продолжить</button>
   </div>
 
@@ -179,7 +189,7 @@
     </div>
   </div>
 
-  <!-- DAY / CHECKLIST -->
+  <!-- DAY -->
   <div class="view" id="view-day">
     <div class="day-header">
       <button class="back-btn" id="backBtn">←</button>
@@ -189,18 +199,19 @@
       </div>
     </div>
 
-    <div class="tabs">
-      <div class="tab active" data-tab="main" id="tabMain">Чек-лист контроля</div>
-      <div class="tab" data-tab="express" id="tabExpress">Туалеты (экспресс)</div>
-    </div>
+    <div class="tabs" id="tabsRow"></div>
 
     <div class="progress-wrap">
       <div class="progress-bar"><div id="progressFill" style="width:0%"></div></div>
       <div class="progress-label" id="progressLabel">0 / 0 отмечено</div>
     </div>
 
-    <div id="mainPanel"></div>
-    <div id="expressPanel" style="display:none;"></div>
+    <div class="time-field" id="timeFieldWrap" style="display:none;">
+      <label id="timeLabel">Фактическое время обхода</label>
+      <input type="time" id="actualTime">
+    </div>
+
+    <div id="dayPanel"></div>
 
     <div class="done-btn"><button class="primary-btn" id="doneBtn">Готово — вернуться к календарю</button></div>
   </div>
@@ -209,13 +220,11 @@
 
 <div class="save-flag" id="saveFlag">Сохранено</div>
 
-<!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
 <script>
 /* ============================================================
-   НАСТРОЙКА FIREBASE — вставьте сюда конфиг вашего проекта
-   (Firebase Console → Project settings → General → Your apps → SDK setup)
+   FIREBASE
    ============================================================ */
 const firebaseConfig = {
   apiKey: "AIzaSyDOsAFeAreln5q43l7s0j57fCjUcrmiD7M",
@@ -230,8 +239,24 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 /* ============================================================
-   ДАННЫЕ: объекты и структура чек-листов
+   ROLES
    ============================================================ */
+const ROLES = {
+  cleaning: {
+    id:"cleaning", label:"Уборка", icon:"🧹", dbRoot:"checklists", accent:"#4472C4",
+    tabs:[{id:"main", label:"Чек-лист контроля"}, {id:"express", label:"Туалеты (экспресс)"}],
+    hasTimeField:false
+  },
+  security: {
+    id:"security", label:"Охрана", icon:"🛡", dbRoot:"patrols", accent:"#B9862E",
+    tabs:[
+      {id:"r2200", label:"22:00"}, {id:"r0000", label:"00:00"}, {id:"r0200", label:"02:00"},
+      {id:"r0400", label:"04:00"}, {id:"r0600", label:"06:00"},
+    ],
+    hasTimeField:true
+  }
+};
+
 const OBJECTS = [
   {id:"soy-boyi", name:"Сой Бо'йи"},
   {id:"regnum-plaza", name:"Регнум Плаза"},
@@ -241,6 +266,9 @@ const OBJECTS = [
   {id:"kislorod", name:"Кислород"},
 ];
 
+/* ============================================================
+   CLEANING DATA
+   ============================================================ */
 const MAIN_SECTIONS = [
   {title:"1. Подъезды и блоки — ежедневная уборка", items:[
     "Пол в подъезде — влажная уборка, нет грязи и пятен",
@@ -316,7 +344,6 @@ const MAIN_SECTIONS = [
     "Журнал забытых/утерянных вещей (форма 01-005 УБ) — ведётся корректно",
   ]},
 ];
-
 const EXPRESS_POINTS = [
   "Пол — чистый, сухой, без мусора",
   "Раковины — без налёта, смесители работают",
@@ -332,21 +359,66 @@ const EXPRESS_POINTS = [
   "Общий запах — нормальный",
 ];
 
-const MAIN_TOTAL = MAIN_SECTIONS.reduce((s,sec)=>s+sec.items.length,0);
-const EXPRESS_TOTAL = EXPRESS_POINTS.length * 2 + 1; // male + female + forma
+/* ============================================================
+   SECURITY DATA
+   ============================================================ */
+const ZONES = [
+  {title:"1. Территория / двор", items:[
+    "Порядок, мусор, посторонние лица",
+    "Освещение фонарей (все горят)",
+    "Детская площадка — безопасность",
+    "Газоны / клумбы — повреждения",
+  ]},
+  {title:"2. Паркинг / въезд", items:[
+    "Автоворота — исправны, не заблокированы",
+    "Авто без нарушений парковки",
+    "Освещение паркинга",
+    "Камеры паркинга — обзор не закрыт",
+  ]},
+  {title:"3. Подъезды", items:[
+    "Двери закрыты / домофон исправен",
+    "Освещение на всех этажах",
+    "Чистота, посторонних нет",
+  ]},
+  {title:"4. Лифты", items:[
+    "Лифты работают (кабина, кнопки, свет)",
+    "Повреждения / граффити в кабине",
+  ]},
+  {title:"5. Периметр / ограждение", items:[
+    "Калитки и ворота закрыты на замок",
+    "Ограждение — повреждения, дыры",
+  ]},
+  {title:"6. Камеры / КПП", items:[
+    "Все камеры онлайн (монитор КПП)",
+    "Запись ведётся (HDD не заполнен)",
+  ]},
+  {title:"7. Тех. помещения", items:[
+    "ИТП, электрощитовые — заперты",
+    "Подозрительные предметы в зонах",
+  ]},
+  {title:"8. УТП", items:[
+    "Освещение / кондиционеры выключены",
+    "Подозрительные предметы в зонах",
+  ]},
+  {title:"9. Тишина / режим", items:[
+    "Шум от жителей / гостей после 23:00",
+    "Соблюдение пропускного режима",
+  ]},
+];
 
 /* ============================================================
    STATE
    ============================================================ */
 let state = {
   name: localStorage.getItem("mb_name") || "",
+  role: localStorage.getItem("mb_role") || null,
   objectId: localStorage.getItem("mb_object") || null,
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
-  selectedDate: null,       // "YYYY-MM-DD"
-  activeTab: "main",
-  cache: {},                 // dateKey -> {main:{...}, express:{...}}
-  monthStatus: {}            // dateKey -> status string
+  selectedDate: null,
+  activeTab: null,
+  cache: {},
+  monthStatus: {}
 };
 
 const MONTHS_RU = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
@@ -355,25 +427,31 @@ const DOW_RU = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 function pad2(n){return n<10?"0"+n:""+n;}
 function dateKey(y,m,d){return `${y}-${pad2(m+1)}-${pad2(d)}`;}
 function objName(id){const o=OBJECTS.find(o=>o.id===id); return o?o.name:"—";}
+function currentRole(){ return ROLES[state.role]; }
+function tabLabel(tabId){ const t=currentRole().tabs.find(t=>t.id===tabId); return t?t.label:tabId; }
 
-/* ============================================================
-   NAVIGATION
-   ============================================================ */
+function applyAccent(){
+  const accent = state.role ? ROLES[state.role].accent : "#4472C4";
+  document.documentElement.style.setProperty("--accent", accent);
+}
+
 function showView(id){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
 
 function goCalendar(){
+  applyAccent();
+  document.getElementById("topTitle").textContent = "MBCares · " + currentRole().label;
   document.getElementById("topSub").textContent = objName(state.objectId) + (state.name?" · "+state.name:"");
-  document.getElementById("objSwitchBtn").style.display = "flex";
+  document.getElementById("switchBtn").style.display = "flex";
   renderCalendar();
   showView("view-calendar");
 }
 
 function goDay(key){
   state.selectedDate = key;
-  state.activeTab = "main";
+  state.activeTab = currentRole().tabs[0].id;
   loadDay(key).then(()=>{
     renderDay();
     showView("view-day");
@@ -383,38 +461,47 @@ function goDay(key){
 /* ============================================================
    ONBOARDING
    ============================================================ */
+function renderRoleList(){
+  const wrap = document.getElementById("roleList");
+  wrap.innerHTML = "";
+  Object.values(ROLES).forEach(r=>{
+    const el = document.createElement("div");
+    el.className = "role-item" + (state.role===r.id ? " sel":"");
+    el.innerHTML = `<div class="ico">${r.icon}</div><div class="txt"><b>${r.label}</b><span>${r.id==="cleaning" ? "Чек-лист контроля уборки, 59 пунктов" : "Ночные обходы, 5 контрольных точек"}</span></div>`;
+    el.onclick = ()=>{ state.role = r.id; renderRoleList(); };
+    wrap.appendChild(el);
+  });
+}
 function renderObjectList(){
   const wrap = document.getElementById("objList");
   wrap.innerHTML = "";
   OBJECTS.forEach(o=>{
     const el = document.createElement("div");
     el.className = "obj-item";
-    el.dataset.id = o.id;
     el.innerHTML = `<span>${o.name}</span><span>${state.objectId===o.id?"✓":"›"}</span>`;
-    if(state.objectId===o.id) el.style.outline = "2px solid var(--blue)";
-    el.onclick = ()=>{
-      state.objectId = o.id;
-      renderObjectList();
-    };
+    if(state.objectId===o.id) el.style.outline = "2px solid var(--accent)";
+    el.onclick = ()=>{ state.objectId = o.id; renderObjectList(); };
     wrap.appendChild(el);
   });
 }
-
 document.getElementById("nameInput").value = state.name;
+renderRoleList();
 renderObjectList();
 
 document.getElementById("continueBtn").onclick = ()=>{
   const name = document.getElementById("nameInput").value.trim();
+  if(!state.role){ alert("Выберите должность"); return; }
   if(!state.objectId){ alert("Выберите объект"); return; }
   state.name = name;
   localStorage.setItem("mb_name", name);
+  localStorage.setItem("mb_role", state.role);
   localStorage.setItem("mb_object", state.objectId);
   goCalendar();
 };
-
-document.getElementById("objSwitchBtn").onclick = ()=>{
+document.getElementById("switchBtn").onclick = ()=>{
+  renderRoleList(); renderObjectList();
   showView("view-onboard");
-  document.getElementById("objSwitchBtn").style.display = "none";
+  document.getElementById("switchBtn").style.display = "none";
 };
 
 /* ============================================================
@@ -431,15 +518,12 @@ function renderCalendar(){
     grid.appendChild(el);
   });
   const first = new Date(y,m,1);
-  let startDow = first.getDay(); // 0=Sun
-  startDow = (startDow===0)?6:startDow-1; // make Monday=0
+  let startDow = first.getDay();
+  startDow = (startDow===0)?6:startDow-1;
   const daysInMonth = new Date(y,m+1,0).getDate();
   const todayKey = dateKey(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
-
   for(let i=0;i<startDow;i++){
-    const el = document.createElement("div");
-    el.className="cal-day empty";
-    grid.appendChild(el);
+    const el = document.createElement("div"); el.className="cal-day empty"; grid.appendChild(el);
   }
   for(let d=1; d<=daysInMonth; d++){
     const key = dateKey(y,m,d);
@@ -449,23 +533,25 @@ function renderCalendar(){
     el.onclick = ()=>goDay(key);
     grid.appendChild(el);
     applyDayStatus(key, el);
-    fetchDayStatus(state.objectId, key, el);
+    fetchDayStatus(key, el);
   }
 }
 
+/* Generic: works for both data shapes — a tree of groups whose leaves
+   carry a "status" field (cleaning: main/express; security: rounds). */
 function computeStatus(data){
   if(!data) return "none";
   let total=0, filled=0, issue=false;
-  const walk = (obj)=>{
-    if(!obj) return;
-    Object.values(obj).forEach(v=>{
+  Object.values(data).forEach(group=>{
+    if(!group || typeof group !== "object") return;
+    Object.entries(group).forEach(([k,v])=>{
+      if(k==="_meta") return;
       if(v && typeof v==="object" && "status" in v){
         total++;
         if(v.status){ filled++; if(v.status==="❌") issue=true; }
       }
     });
-  };
-  walk(data.main); walk(data.express);
+  });
   if(total===0 || filled===0) return "none";
   if(issue) return "issue";
   if(filled<total) return "partial";
@@ -478,10 +564,9 @@ function applyDayStatus(key, el){
   el.classList.remove("st-none","st-partial","st-done","st-issue");
   el.classList.add("st-"+st);
 }
-
-function fetchDayStatus(objectId, key, el){
-  if(!objectId) return;
-  db.ref(`checklists/${objectId}/${key}`).once("value").then(snap=>{
+function fetchDayStatus(key, el){
+  if(!state.objectId || !state.role) return;
+  db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}`).once("value").then(snap=>{
     const st = computeStatus(snap.val());
     state.monthStatus[key] = st;
     applyDayStatus(key, el);
@@ -500,14 +585,13 @@ document.getElementById("backBtn").onclick = goCalendar;
 document.getElementById("doneBtn").onclick = goCalendar;
 
 /* ============================================================
-   DAY / CHECKLIST
+   DAY
    ============================================================ */
 function loadDay(key){
   if(state.cache[key]) return Promise.resolve(state.cache[key]);
-  return db.ref(`checklists/${state.objectId}/${key}`).once("value").then(snap=>{
-    const data = snap.val() || {main:{}, express:{}};
-    if(!data.main) data.main = {};
-    if(!data.express) data.express = {};
+  return db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}`).once("value").then(snap=>{
+    const data = snap.val() || {};
+    currentRole().tabs.forEach(t=>{ if(!data[t.id]) data[t.id] = {}; });
     state.cache[key] = data;
     return data;
   });
@@ -518,29 +602,91 @@ function fmtDateHuman(key){
   return `${d} ${MONTHS_RU[m-1].toLowerCase()} ${y}`;
 }
 
+function getVal(group, path){
+  let obj = state.cache[state.selectedDate][group];
+  const parts = path.split(".");
+  for(const p of parts){ obj = obj ? obj[p] : undefined; }
+  return obj;
+}
+function setVal(group, path, value){
+  let obj = state.cache[state.selectedDate][group];
+  const parts = path.split(".");
+  for(let i=0;i<parts.length-1;i++){
+    if(!obj[parts[i]]) obj[parts[i]] = {};
+    obj = obj[parts[i]];
+  }
+  obj[parts[parts.length-1]] = value;
+}
+
+function groupStatus(group){
+  const data = state.cache[state.selectedDate][group] || {};
+  let total=0, filled=0, issue=false;
+  Object.entries(data).forEach(([k,v])=>{
+    if(k==="_meta") return;
+    if(v && typeof v==="object" && "status" in v){ total++; if(v.status){filled++; if(v.status==="❌") issue=true;} }
+  });
+  if(filled===0) return "none";
+  if(issue) return "issue";
+  if(filled<total) return "partial";
+  return "done";
+}
+
 function renderDay(){
   const key = state.selectedDate;
-  document.getElementById("dayTitle").textContent = fmtDateHuman(key);
+  const roleObj = currentRole();
+  document.getElementById("dayTitle").textContent =
+    (roleObj.id==="security" ? "Ночной обход · " : "") + fmtDateHuman(key);
   document.getElementById("dayObj").textContent = objName(state.objectId) + (state.name?" · "+state.name:"");
+  document.getElementById("timeFieldWrap").style.display = roleObj.hasTimeField ? "flex" : "none";
   renderTabs();
-  renderMainPanel();
-  renderExpressPanel();
+  renderDayPanel();
   updateProgress();
 }
 
 function renderTabs(){
-  document.getElementById("tabMain").classList.toggle("active", state.activeTab==="main");
-  document.getElementById("tabExpress").classList.toggle("active", state.activeTab==="express");
-  document.getElementById("mainPanel").style.display = state.activeTab==="main" ? "block":"none";
-  document.getElementById("expressPanel").style.display = state.activeTab==="express" ? "block":"none";
+  const wrap = document.getElementById("tabsRow");
+  wrap.innerHTML = "";
+  currentRole().tabs.forEach(t=>{
+    const el = document.createElement("div");
+    el.className = "tab" + (state.activeTab===t.id ? " active":"");
+    let dotHtml = "";
+    if(currentRole().hasTimeField){
+      const st = groupStatus(t.id);
+      const dotColor = {none:"#D5DAE2", partial:"var(--warn)", done:"var(--ok)", issue:"var(--bad)"}[st];
+      dotHtml = `<span class="dot-mini" style="background:${dotColor}"></span>`;
+    }
+    el.innerHTML = `${t.label}${dotHtml}`;
+    el.onclick = ()=>{ state.activeTab=t.id; renderTabs(); renderDayPanel(); updateProgress(); };
+    wrap.appendChild(el);
+  });
 }
-document.getElementById("tabMain").onclick = ()=>{state.activeTab="main"; renderTabs();};
-document.getElementById("tabExpress").onclick = ()=>{state.activeTab="express"; renderTabs();};
 
-function itemRow(idPath, text){
-  const data = getVal(idPath) || {};
+function itemRow(group, path, text, opts){
+  opts = opts || {};
+  const data = getVal(group, path) || {};
   const row = document.createElement("div");
   row.className = "item";
+  if(opts.binary){
+    row.innerHTML = `
+      <div class="item-text">${text}</div>
+      <div class="seg">
+        <button data-v="Да" class="${data.status==='Да'?'sel-ok':''}">Да</button>
+        <button data-v="Нет" class="${data.status==='Нет'?'sel-bad':''}">Нет</button>
+      </div>`;
+    row.querySelectorAll(".seg button").forEach(btn=>{
+      btn.onclick = ()=>{
+        const v = btn.dataset.v;
+        const cur = getVal(group, path) || {};
+        const newStatus = cur.status===v ? "" : v;
+        setVal(group, path, {status:newStatus, ts:Date.now(), by:state.name});
+        row.querySelectorAll(".seg button").forEach(b=>b.classList.remove("sel-ok","sel-bad"));
+        if(newStatus==="Да") btn.classList.add("sel-ok");
+        if(newStatus==="Нет") btn.classList.add("sel-bad");
+        updateProgress(); renderTabs(); queueSave();
+      };
+    });
+    return row;
+  }
   row.innerHTML = `
     <div class="item-text">${text}</div>
     <div class="seg">
@@ -555,120 +701,105 @@ function itemRow(idPath, text){
   seg.querySelectorAll("button").forEach(btn=>{
     btn.onclick = ()=>{
       const v = btn.dataset.v;
-      const cur = getVal(idPath) || {};
+      const cur = getVal(group, path) || {};
       const newStatus = cur.status===v ? "" : v;
-      setVal(idPath, {status:newStatus, comment:cur.comment||"", ts:Date.now(), by:state.name});
+      setVal(group, path, {status:newStatus, comment:cur.comment||"", ts:Date.now(), by:state.name});
       seg.querySelectorAll("button").forEach(b=>b.classList.remove("sel-ok","sel-warn","sel-bad"));
       if(newStatus==="✅") btn.classList.add("sel-ok");
       if(newStatus==="⚠") btn.classList.add("sel-warn");
       if(newStatus==="❌") btn.classList.add("sel-bad");
       textarea.classList.toggle("show", newStatus==="⚠"||newStatus==="❌");
-      updateProgress();
-      queueSave();
+      updateProgress(); renderTabs(); queueSave();
     };
   });
   textarea.oninput = ()=>{
-    const cur = getVal(idPath) || {};
-    setVal(idPath, {...cur, comment:textarea.value, ts:Date.now(), by:state.name});
+    const cur = getVal(group, path) || {};
+    setVal(group, path, {...cur, comment:textarea.value, ts:Date.now(), by:state.name});
     queueSave();
   };
   return row;
 }
 
-function getVal(path){
-  const parts = path.split(".");
-  let obj = state.cache[state.selectedDate];
-  for(const p of parts){ obj = obj ? obj[p] : undefined; }
-  return obj;
-}
-function setVal(path, value){
-  const parts = path.split(".");
-  let obj = state.cache[state.selectedDate];
-  for(let i=0;i<parts.length-1;i++){
-    if(!obj[parts[i]]) obj[parts[i]] = {};
-    obj = obj[parts[i]];
-  }
-  obj[parts[parts.length-1]] = value;
-}
-
-function renderMainPanel(){
-  const panel = document.getElementById("mainPanel");
+function renderDayPanel(){
+  const panel = document.getElementById("dayPanel");
   panel.innerHTML = "";
-  MAIN_SECTIONS.forEach((sec, si)=>{
-    const secEl = document.createElement("div");
-    secEl.className = "section";
-    const head = document.createElement("div");
-    head.className = "section-head";
-    head.innerHTML = `<span>${sec.title}</span><span class="count"></span>`;
-    secEl.appendChild(head);
-    sec.items.forEach((text, ii)=>{
-      const path = `main.s${si}_${ii}`;
-      secEl.appendChild(itemRow(path, text));
-    });
-    panel.appendChild(secEl);
-  });
-}
+  const roleObj = currentRole();
 
-function renderExpressPanel(){
-  const panel = document.getElementById("expressPanel");
-  panel.innerHTML = "";
-  ["male","female"].forEach(gender=>{
-    const secEl = document.createElement("div");
-    secEl.className = "section";
-    const head = document.createElement("div");
-    head.className = "section-head";
-    head.innerHTML = `<span>${gender==="male"?"Мужская уборная":"Женская уборная"}</span><span class="count"></span>`;
-    secEl.appendChild(head);
-    EXPRESS_POINTS.forEach((text, ii)=>{
-      const path = `express.${gender}_${ii}`;
-      secEl.appendChild(itemRow(path, text));
-    });
-    panel.appendChild(secEl);
-  });
-  // forma row
-  const secEl = document.createElement("div");
-  secEl.className = "section";
-  secEl.innerHTML = `<div class="section-head"><span>Форма уборщицы (каждые 2 ч.)</span></div>`;
-  const row = document.createElement("div");
-  row.className = "item";
-  const data = getVal("express.forma") || {};
-  row.innerHTML = `
-    <div class="item-text">Форма заполнена и подписана?</div>
-    <div class="seg">
-      <button data-v="Да" class="${data.status==='Да'?'sel-ok':''}">Да</button>
-      <button data-v="Нет" class="${data.status==='Нет'?'sel-bad':''}">Нет</button>
-    </div>`;
-  row.querySelectorAll(".seg button").forEach(btn=>{
-    btn.onclick = ()=>{
-      const v = btn.dataset.v;
-      const cur = getVal("express.forma") || {};
-      const newStatus = cur.status===v ? "" : v;
-      setVal("express.forma", {status:newStatus, ts:Date.now(), by:state.name});
-      row.querySelectorAll(".seg button").forEach(b=>b.classList.remove("sel-ok","sel-bad"));
-      if(newStatus==="Да") btn.classList.add("sel-ok");
-      if(newStatus==="Нет") btn.classList.add("sel-bad");
-      updateProgress();
+  if(roleObj.hasTimeField){
+    document.getElementById("timeLabel").textContent = `Фактическое время обхода (план ${tabLabel(state.activeTab)})`;
+    const timeInput = document.getElementById("actualTime");
+    const meta = getVal(state.activeTab, "_meta") || {};
+    timeInput.value = meta.actualTime || "";
+    timeInput.oninput = ()=>{
+      setVal(state.activeTab, "_meta", {actualTime:timeInput.value, by:state.name, ts:Date.now()});
       queueSave();
     };
-  });
-  secEl.appendChild(row);
-  panel.appendChild(secEl);
+  }
+
+  if(roleObj.id === "cleaning"){
+    if(state.activeTab === "main"){
+      MAIN_SECTIONS.forEach((sec, si)=>{
+        const secEl = document.createElement("div");
+        secEl.className = "section";
+        const head = document.createElement("div");
+        head.className = "section-head"; head.textContent = sec.title;
+        secEl.appendChild(head);
+        sec.items.forEach((text, ii)=> secEl.appendChild(itemRow("main", `s${si}_${ii}`, text)));
+        panel.appendChild(secEl);
+      });
+    } else {
+      ["male","female"].forEach(gender=>{
+        const secEl = document.createElement("div");
+        secEl.className = "section";
+        const head = document.createElement("div");
+        head.className = "section-head";
+        head.textContent = gender==="male" ? "Мужская уборная" : "Женская уборная";
+        secEl.appendChild(head);
+        EXPRESS_POINTS.forEach((text, ii)=> secEl.appendChild(itemRow("express", `${gender}_${ii}`, text)));
+        panel.appendChild(secEl);
+      });
+      const secEl = document.createElement("div");
+      secEl.className = "section";
+      secEl.innerHTML = `<div class="section-head">Форма уборщицы (каждые 2 ч.)</div>`;
+      secEl.appendChild(itemRow("express", "forma", "Форма заполнена и подписана?", {binary:true}));
+      panel.appendChild(secEl);
+    }
+  } else {
+    ZONES.forEach((zone, zi)=>{
+      const secEl = document.createElement("div");
+      secEl.className = "section";
+      const head = document.createElement("div");
+      head.className = "section-head"; head.textContent = zone.title;
+      secEl.appendChild(head);
+      zone.items.forEach((text, ii)=> secEl.appendChild(itemRow(state.activeTab, `z${zi}_${ii}`, text)));
+      panel.appendChild(secEl);
+    });
+  }
 }
 
 function updateProgress(){
-  const data = state.cache[state.selectedDate];
+  const roleObj = currentRole();
   let total=0, filled=0;
-  const walk = (obj)=>{ if(!obj) return; Object.values(obj).forEach(v=>{
-    if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
-  });};
-  walk(data.main); walk(data.express);
+  if(roleObj.id === "cleaning"){
+    const data = state.cache[state.selectedDate][state.activeTab] || {};
+    Object.entries(data).forEach(([k,v])=>{
+      if(k==="_meta") return;
+      if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
+    });
+  } else {
+    const data = state.cache[state.selectedDate][state.activeTab] || {};
+    Object.entries(data).forEach(([k,v])=>{
+      if(k==="_meta") return;
+      if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
+    });
+  }
   const pct = total? Math.round(filled/total*100) : 0;
   document.getElementById("progressFill").style.width = pct+"%";
-  document.getElementById("progressLabel").textContent = `${filled} / ${total} отмечено`;
+  document.getElementById("progressLabel").textContent = `${filled} / ${total} отмечено` + (roleObj.hasTimeField ? ` (${tabLabel(state.activeTab)})` : "");
 }
 
 /* ============================================================
-   SAVE (debounced)
+   SAVE
    ============================================================ */
 let saveTimer = null;
 function queueSave(){
@@ -678,12 +809,10 @@ function queueSave(){
 function doSave(){
   const key = state.selectedDate;
   const data = state.cache[key];
-  db.ref(`checklists/${state.objectId}/${key}`).set(data).then(()=>{
+  db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}`).set(data).then(()=>{
     state.monthStatus[key] = computeStatus(data);
     flashSaved();
-  }).catch(err=>{
-    console.error("Save error", err);
-  });
+  }).catch(err=>console.error("Save error", err));
 }
 function flashSaved(){
   const el = document.getElementById("saveFlag");
@@ -694,13 +823,11 @@ function flashSaved(){
 /* ============================================================
    INIT
    ============================================================ */
-if(state.objectId){
+if(state.role && state.objectId){
   goCalendar();
 } else {
-  document.getElementById("objSwitchBtn").style.display = "none";
+  document.getElementById("switchBtn").style.display = "none";
 }
-
-/* Register service worker for offline/installable PWA */
 if("serviceWorker" in navigator){
   window.addEventListener("load", ()=>{
     navigator.serviceWorker.register("sw.js").catch(()=>{});

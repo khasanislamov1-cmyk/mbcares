@@ -1,6 +1,6 @@
 {
-  "name": "MBCares — Контроль уборки",
-  "short_name": "MBCares Уборка",
+  "name": "MBCares — Чек-листы",
+  "short_name": "MBCares",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#F5F7FA",

@@ -1,4 +1,4 @@
-const CACHE = "mbcares-cleaning-v1";
+const CACHE = "mbcares-app-v1";
 const SHELL = ["./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -14,9 +14,8 @@ self.addEventListener("activate", e => {
 });
 
 self.addEventListener("fetch", e => {
-  // Network-first for Firebase data calls, cache-first for the app shell
   if (e.request.url.includes("firebasedatabase.app") || e.request.url.includes("firebaseio.com")) {
-    return; // let these go straight to the network
+    return;
   }
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
