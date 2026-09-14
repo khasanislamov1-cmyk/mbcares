@@ -41,27 +41,13 @@
     border-radius:10px; font-size:16px; display:flex; align-items:center; justify-content:center;
   }
   .iconbtn:active{background:rgba(255,255,255,.24);}
+  .topbtns{display:flex; gap:6px;}
 
   .view{padding:16px; flex:1; display:none;}
   .view.active{display:block;}
 
-  .role-list{display:flex; flex-direction:column; gap:10px; margin-top:6px;}
-  .role-item{
-    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
-    padding:18px; display:flex; align-items:center; gap:14px;
-  }
-  .role-item .ico{font-size:26px;}
-  .role-item .txt b{display:block; font-size:15px; color:var(--navy);}
-  .role-item .txt span{display:block; font-size:12.5px; color:var(--muted); margin-top:2px;}
-  .role-item.sel{outline:2px solid var(--accent);}
-
-  .obj-list{display:flex; flex-direction:column; gap:10px; margin-top:6px;}
-  .obj-item{
-    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
-    padding:16px; font-size:15px; font-weight:600; color:var(--navy);
-    display:flex; align-items:center; justify-content:space-between;
-  }
-  .obj-item:active{background:#EEF2F8;}
+  .login-wrap{padding-top:14vh;}
+  .login-logo{text-align:center; font-size:15px; font-weight:700; color:var(--navy); margin-bottom:22px;}
   .field{margin-bottom:14px;}
   .field label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px;}
   .field input{
@@ -74,12 +60,29 @@
   }
   .primary-btn:active{background:#16294A;}
   .primary-btn:disabled{opacity:.45;}
+  .error-msg{
+    background:var(--bad-bg); color:var(--bad); border-radius:10px; padding:10px 12px;
+    font-size:13px; margin-bottom:14px; display:none;
+  }
+  .error-msg.show{display:block;}
+  .hint{font-size:12px; color:var(--muted); text-align:center; margin-top:16px; line-height:1.5;}
+
+  .obj-list{display:flex; flex-direction:column; gap:10px; margin-top:6px;}
+  .obj-item{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px; font-size:15px; font-weight:600; color:var(--navy);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .obj-item:active{background:#EEF2F8;}
+  .subhead{font-size:12px; font-weight:700; color:var(--muted); margin:18px 2px 8px; text-transform:uppercase; letter-spacing:.03em;}
+  .who-badge{
+    background:#EEF2F8; border-radius:var(--radius); padding:12px 14px; margin-bottom:16px;
+    font-size:13px; color:var(--navy); display:flex; align-items:center; justify-content:space-between;
+  }
+  .who-badge b{font-size:14px;}
 
   .cal-head{display:flex; align-items:center; justify-content:space-between; margin:4px 0 14px;}
   .cal-head .month{font-size:17px; font-weight:700; color:var(--navy);}
-  .cal-nav button{
-    background:#fff; border:1px solid var(--line); width:34px; height:34px; border-radius:9px; font-size:15px; color:var(--navy);
-  }
   .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
   .cal-dow{text-align:center; font-size:11px; color:var(--muted); padding-bottom:4px;}
   .cal-day{
@@ -135,8 +138,6 @@
   }
   .comment.show{display:block;}
 
-  .subhead{font-size:12px; font-weight:700; color:var(--muted); margin:18px 2px 8px; text-transform:uppercase; letter-spacing:.03em;}
-
   .save-flag{
     position:fixed; left:50%; transform:translateX(-50%); bottom:18px; background:var(--navy); color:#fff;
     padding:8px 16px; border-radius:20px; font-size:12px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:50;
@@ -144,33 +145,56 @@
   .save-flag.show{opacity:1;}
 
   .done-btn{position:sticky; bottom:0; background:var(--bg); padding:12px 0 6px; margin-top:8px;}
+  .center-msg{text-align:center; padding-top:20vh; color:var(--muted); font-size:14px;}
 </style>
 </head>
 <body>
 <div id="app">
 
-  <div class="topbar">
+  <div class="topbar" id="topbar" style="display:none;">
     <div>
       <h1 id="topTitle">MBCares</h1>
       <div class="sub" id="topSub"></div>
     </div>
-    <button class="iconbtn" id="switchBtn" title="Сменить должность/объект">⇄</button>
+    <div class="topbtns">
+      <button class="iconbtn" id="switchBtn" title="Сменить объект">⇄</button>
+      <button class="iconbtn" id="logoutBtn" title="Выйти">⏻</button>
+    </div>
   </div>
 
-  <!-- ONBOARDING -->
-  <div class="view active" id="view-onboard">
-    <div class="field">
-      <label>Ваше имя</label>
-      <input id="nameInput" type="text" placeholder="Например: Гулноза">
+  <!-- LOGIN -->
+  <div class="view active" id="view-login">
+    <div class="login-wrap">
+      <div class="login-logo">MBCares · Чек-листы</div>
+      <div class="error-msg" id="loginError"></div>
+      <div class="field">
+        <label>Email</label>
+        <input id="loginEmail" type="email" placeholder="ваш-логин@mbcares.uz" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Пароль</label>
+        <input id="loginPassword" type="password" placeholder="Пароль" autocomplete="current-password">
+      </div>
+      <button class="primary-btn" id="loginBtn">Войти</button>
+      <div class="hint">Доступ выдаётся администратором. Если нет логина и пароля — обратитесь к своему менеджеру.</div>
     </div>
+  </div>
 
-    <div class="subhead" style="margin-top:20px;">Ваша должность</div>
-    <div class="role-list" id="roleList"></div>
+  <!-- ACCOUNT NOT CONFIGURED -->
+  <div class="view" id="view-noaccess">
+    <div class="center-msg" id="noAccessMsg">—</div>
+  </div>
 
-    <div class="subhead" style="margin-top:20px;">Объект (ЖК)</div>
+  <!-- OBJECT SELECT -->
+  <div class="view" id="view-object">
+    <div class="who-badge">
+      <span>Вы вошли как <b id="whoName">—</b></span>
+      <span id="whoRole">—</span>
+    </div>
+    <div class="subhead" id="sectionSubhead" style="display:none;">Раздел</div>
+    <div class="obj-list" id="sectionList" style="display:none; margin-bottom:6px;"></div>
+    <div class="subhead">Объект (ЖК)</div>
     <div class="obj-list" id="objList"></div>
-
-    <button class="primary-btn" id="continueBtn" style="margin-top:18px;">Продолжить</button>
   </div>
 
   <!-- CALENDAR -->
@@ -221,6 +245,7 @@
 <div class="save-flag" id="saveFlag">Сохранено</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
 <script>
 /* ============================================================
@@ -236,6 +261,7 @@ const firebaseConfig = {
   appId: "1:535715037446:web:2fde13f54f9c9cb8889e87"
 };
 firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 const db = firebase.database();
 
 /* ============================================================
@@ -243,12 +269,12 @@ const db = firebase.database();
    ============================================================ */
 const ROLES = {
   cleaning: {
-    id:"cleaning", label:"Уборка", icon:"🧹", dbRoot:"checklists", accent:"#4472C4",
+    id:"cleaning", label:"Уборка", dbRoot:"checklists", accent:"#4472C4",
     tabs:[{id:"main", label:"Чек-лист контроля"}, {id:"express", label:"Туалеты (экспресс)"}],
     hasTimeField:false
   },
   security: {
-    id:"security", label:"Охрана", icon:"🛡", dbRoot:"patrols", accent:"#B9862E",
+    id:"security", label:"Охрана", dbRoot:"patrols", accent:"#B9862E",
     tabs:[
       {id:"r2200", label:"22:00"}, {id:"r0000", label:"00:00"}, {id:"r0200", label:"02:00"},
       {id:"r0400", label:"04:00"}, {id:"r0600", label:"06:00"},
@@ -410,9 +436,11 @@ const ZONES = [
    STATE
    ============================================================ */
 let state = {
-  name: localStorage.getItem("mb_name") || "",
-  role: localStorage.getItem("mb_role") || null,
-  objectId: localStorage.getItem("mb_object") || null,
+  uid: null,
+  name: "",
+  role: null,
+  viewRole: null,   // used only when role === "manager": which section they're currently browsing
+  objectId: null,
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
   selectedDate: null,
@@ -427,52 +455,96 @@ const DOW_RU = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 function pad2(n){return n<10?"0"+n:""+n;}
 function dateKey(y,m,d){return `${y}-${pad2(m+1)}-${pad2(d)}`;}
 function objName(id){const o=OBJECTS.find(o=>o.id===id); return o?o.name:"—";}
-function currentRole(){ return ROLES[state.role]; }
+function isManager(){ return state.role === "manager"; }
+function effectiveRole(){ return isManager() ? (state.viewRole || "cleaning") : state.role; }
+function currentRole(){ return ROLES[effectiveRole()]; }
 /* Cache and calendar status must be scoped per role+object, not just per date —
    otherwise switching role/object on the same date reuses another role's data
    shape and crashes when writing. */
-function scopeKey(dateKey){ return `${state.role}|${state.objectId}|${dateKey}`; }
+function scopeKey(dateKey){ return `${effectiveRole()}|${state.objectId}|${dateKey}`; }
 function tabLabel(tabId){ const t=currentRole().tabs.find(t=>t.id===tabId); return t?t.label:tabId; }
 
 function applyAccent(){
-  const accent = state.role ? ROLES[state.role].accent : "#4472C4";
+  const accent = state.role ? ROLES[effectiveRole()].accent : "#4472C4";
   document.documentElement.style.setProperty("--accent", accent);
 }
-
 function showView(id){
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
 
-function goCalendar(){
-  applyAccent();
-  document.getElementById("topTitle").textContent = "MBCares · " + currentRole().label;
-  document.getElementById("topSub").textContent = objName(state.objectId) + (state.name?" · "+state.name:"");
-  document.getElementById("switchBtn").style.display = "flex";
-  renderCalendar();
-  showView("view-calendar");
-}
-
-function goDay(key){
-  state.selectedDate = key;
-  state.activeTab = currentRole().tabs[0].id;
-  loadDay(key).then(()=>{
-    renderDay();
-    showView("view-day");
+/* ============================================================
+   AUTH
+   ============================================================ */
+document.getElementById("loginBtn").onclick = ()=>{
+  const email = document.getElementById("loginEmail").value.trim();
+  const pass = document.getElementById("loginPassword").value;
+  const errEl = document.getElementById("loginError");
+  errEl.classList.remove("show");
+  if(!email || !pass){ errEl.textContent = "Введите email и пароль"; errEl.classList.add("show"); return; }
+  auth.signInWithEmailAndPassword(email, pass).catch(err=>{
+    errEl.textContent = "Не удалось войти: неверный email или пароль";
+    errEl.classList.add("show");
   });
-}
+};
+
+document.getElementById("logoutBtn").onclick = ()=>{
+  auth.signOut();
+};
+
+auth.onAuthStateChanged(user=>{
+  if(!user){
+    state.uid = null; state.role = null; state.viewRole = null; state.name = ""; state.objectId = null;
+    document.getElementById("topbar").style.display = "none";
+    showView("view-login");
+    return;
+  }
+  state.uid = user.uid;
+  document.getElementById("topbar").style.display = "flex";
+  db.ref(`users/${user.uid}`).once("value").then(snap=>{
+    const rec = snap.val();
+    const validRole = rec && rec.role && (ROLES[rec.role] || rec.role === "manager");
+    if(!validRole){
+      document.getElementById("noAccessMsg").innerHTML =
+        `Аккаунт <b>${user.email}</b> есть, но роль не назначена.<br>Обратитесь к администратору MBCares.`;
+      showView("view-noaccess");
+      return;
+    }
+    state.role = rec.role;
+    if(isManager()) state.viewRole = "cleaning";
+    state.name = rec.name || user.email;
+    applyAccent();
+    document.getElementById("topTitle").textContent = "MBCares · " + (isManager() ? "Просмотр" : currentRole().label);
+    goObjectSelect();
+  }).catch(()=>{
+    document.getElementById("noAccessMsg").textContent = "Не удалось загрузить профиль. Проверьте интернет и обновите страницу.";
+    showView("view-noaccess");
+  });
+});
 
 /* ============================================================
-   ONBOARDING
+   OBJECT SELECT
    ============================================================ */
-function renderRoleList(){
-  const wrap = document.getElementById("roleList");
+function goObjectSelect(){
+  document.getElementById("switchBtn").style.display = "flex";
+  document.getElementById("topSub").textContent = state.name;
+  document.getElementById("whoName").textContent = state.name;
+  document.getElementById("whoRole").textContent = isManager() ? "Только просмотр" : currentRole().label;
+  document.getElementById("sectionSubhead").style.display = isManager() ? "block" : "none";
+  document.getElementById("sectionList").style.display = isManager() ? "flex" : "none";
+  if(isManager()) renderSectionList();
+  renderObjectList();
+  showView("view-object");
+}
+function renderSectionList(){
+  const wrap = document.getElementById("sectionList");
   wrap.innerHTML = "";
   Object.values(ROLES).forEach(r=>{
     const el = document.createElement("div");
-    el.className = "role-item" + (state.role===r.id ? " sel":"");
-    el.innerHTML = `<div class="ico">${r.icon}</div><div class="txt"><b>${r.label}</b><span>${r.id==="cleaning" ? "Чек-лист контроля уборки, 59 пунктов" : "Ночные обходы, 5 контрольных точек"}</span></div>`;
-    el.onclick = ()=>{ state.role = r.id; renderRoleList(); };
+    el.className = "obj-item";
+    el.innerHTML = `<span>${r.label}</span><span>${state.viewRole===r.id?"✓":"›"}</span>`;
+    if(state.viewRole===r.id) el.style.outline = "2px solid var(--accent)";
+    el.onclick = ()=>{ state.viewRole = r.id; applyAccent(); renderSectionList(); };
     wrap.appendChild(el);
   });
 }
@@ -482,31 +554,27 @@ function renderObjectList(){
   OBJECTS.forEach(o=>{
     const el = document.createElement("div");
     el.className = "obj-item";
-    el.innerHTML = `<span>${o.name}</span><span>${state.objectId===o.id?"✓":"›"}</span>`;
-    if(state.objectId===o.id) el.style.outline = "2px solid var(--accent)";
-    el.onclick = ()=>{ state.objectId = o.id; renderObjectList(); };
+    el.innerHTML = `<span>${o.name}</span><span>›</span>`;
+    el.onclick = ()=>{ state.objectId = o.id; goCalendar(); };
     wrap.appendChild(el);
   });
 }
-document.getElementById("nameInput").value = state.name;
-renderRoleList();
-renderObjectList();
-
-document.getElementById("continueBtn").onclick = ()=>{
-  const name = document.getElementById("nameInput").value.trim();
-  if(!state.role){ alert("Выберите должность"); return; }
-  if(!state.objectId){ alert("Выберите объект"); return; }
-  state.name = name;
-  localStorage.setItem("mb_name", name);
-  localStorage.setItem("mb_role", state.role);
-  localStorage.setItem("mb_object", state.objectId);
-  goCalendar();
-};
 document.getElementById("switchBtn").onclick = ()=>{
-  renderRoleList(); renderObjectList();
-  showView("view-onboard");
-  document.getElementById("switchBtn").style.display = "none";
+  goObjectSelect();
 };
+
+
+function goCalendar(){
+  const sectionLabel = isManager() ? " · " + currentRole().label : "";
+  document.getElementById("topSub").textContent = objName(state.objectId) + sectionLabel + " · " + state.name;
+  renderCalendar();
+  showView("view-calendar");
+}
+function goDay(key){
+  state.selectedDate = key;
+  state.activeTab = currentRole().tabs[0].id;
+  loadDay(key).then(()=>{ renderDay(); showView("view-day"); });
+}
 
 /* ============================================================
    CALENDAR
@@ -541,8 +609,6 @@ function renderCalendar(){
   }
 }
 
-/* Generic: works for both data shapes — a tree of groups whose leaves
-   carry a "status" field (cleaning: main/express; security: rounds). */
 function computeStatus(data){
   if(!data) return "none";
   let total=0, filled=0, issue=false;
@@ -561,7 +627,6 @@ function computeStatus(data){
   if(filled<total) return "partial";
   return "done";
 }
-
 function applyDayStatus(key, el){
   const st = state.monthStatus[scopeKey(key)];
   if(!st) return;
@@ -601,12 +666,10 @@ function loadDay(key){
     return data;
   });
 }
-
 function fmtDateHuman(key){
   const [y,m,d] = key.split("-").map(Number);
   return `${d} ${MONTHS_RU[m-1].toLowerCase()} ${y}`;
 }
-
 function getVal(group, path){
   let obj = state.cache[scopeKey(state.selectedDate)][group];
   const parts = path.split(".");
@@ -622,7 +685,6 @@ function setVal(group, path, value){
   }
   obj[parts[parts.length-1]] = value;
 }
-
 function groupStatus(group){
   const data = state.cache[scopeKey(state.selectedDate)][group] || {};
   let total=0, filled=0, issue=false;
@@ -635,19 +697,17 @@ function groupStatus(group){
   if(filled<total) return "partial";
   return "done";
 }
-
 function renderDay(){
   const key = state.selectedDate;
   const roleObj = currentRole();
   document.getElementById("dayTitle").textContent =
     (roleObj.id==="security" ? "Ночной обход · " : "") + fmtDateHuman(key);
-  document.getElementById("dayObj").textContent = objName(state.objectId) + (state.name?" · "+state.name:"");
+  document.getElementById("dayObj").textContent = objName(state.objectId) + " · " + state.name;
   document.getElementById("timeFieldWrap").style.display = roleObj.hasTimeField ? "flex" : "none";
   renderTabs();
   renderDayPanel();
   updateProgress();
 }
-
 function renderTabs(){
   const wrap = document.getElementById("tabsRow");
   wrap.innerHTML = "";
@@ -665,10 +725,29 @@ function renderTabs(){
     wrap.appendChild(el);
   });
 }
-
 function itemRow(group, path, text, opts){
   opts = opts || {};
   const data = getVal(group, path) || {};
+
+  if(isManager()){
+    const row = document.createElement("div");
+    row.className = "item";
+    const badgeMap = {
+      "✅": {cls:"sel-ok", label:"✅"}, "⚠": {cls:"sel-warn", label:"⚠"}, "❌": {cls:"sel-bad", label:"❌"},
+      "Да": {cls:"sel-ok", label:"Да"}, "Нет": {cls:"sel-bad", label:"Нет"}
+    };
+    const b = badgeMap[data.status];
+    const badgeHtml = b
+      ? `<span class="seg" style="max-width:120px;"><button class="${b.cls}" style="pointer-events:none;">${b.label}</button></span>`
+      : `<span style="color:var(--muted); font-size:13px;">— не отмечено</span>`;
+    row.innerHTML = `
+      <div class="item-text">${text}</div>
+      ${badgeHtml}
+      ${data.comment ? `<div class="comment show" style="background:#F5F7FA; color:var(--text);">${data.comment}</div>` : ""}
+    `;
+    return row;
+  }
+
   const row = document.createElement("div");
   row.className = "item";
   if(opts.binary){
@@ -724,7 +803,6 @@ function itemRow(group, path, text, opts){
   };
   return row;
 }
-
 function renderDayPanel(){
   const panel = document.getElementById("dayPanel");
   panel.innerHTML = "";
@@ -735,7 +813,8 @@ function renderDayPanel(){
     const timeInput = document.getElementById("actualTime");
     const meta = getVal(state.activeTab, "_meta") || {};
     timeInput.value = meta.actualTime || "";
-    timeInput.oninput = ()=>{
+    timeInput.disabled = isManager();
+    timeInput.oninput = isManager() ? null : ()=>{
       setVal(state.activeTab, "_meta", {actualTime:timeInput.value, by:state.name, ts:Date.now()});
       queueSave();
     };
@@ -781,23 +860,14 @@ function renderDayPanel(){
     });
   }
 }
-
 function updateProgress(){
   const roleObj = currentRole();
   let total=0, filled=0;
-  if(roleObj.id === "cleaning"){
-    const data = state.cache[scopeKey(state.selectedDate)][state.activeTab] || {};
-    Object.entries(data).forEach(([k,v])=>{
-      if(k==="_meta") return;
-      if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
-    });
-  } else {
-    const data = state.cache[scopeKey(state.selectedDate)][state.activeTab] || {};
-    Object.entries(data).forEach(([k,v])=>{
-      if(k==="_meta") return;
-      if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
-    });
-  }
+  const data = state.cache[scopeKey(state.selectedDate)][state.activeTab] || {};
+  Object.entries(data).forEach(([k,v])=>{
+    if(k==="_meta") return;
+    if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
+  });
   const pct = total? Math.round(filled/total*100) : 0;
   document.getElementById("progressFill").style.width = pct+"%";
   document.getElementById("progressLabel").textContent = `${filled} / ${total} отмечено` + (roleObj.hasTimeField ? ` (${tabLabel(state.activeTab)})` : "");
@@ -812,6 +882,7 @@ function queueSave(){
   saveTimer = setTimeout(doSave, 600);
 }
 function doSave(){
+  if(isManager()) return; // read-only account — never writes
   const key = state.selectedDate;
   const data = state.cache[scopeKey(key)];
   db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}`).set(data).then(()=>{
@@ -826,13 +897,8 @@ function flashSaved(){
 }
 
 /* ============================================================
-   INIT
+   PWA install
    ============================================================ */
-if(state.role && state.objectId){
-  goCalendar();
-} else {
-  document.getElementById("switchBtn").style.display = "none";
-}
 if("serviceWorker" in navigator){
   window.addEventListener("load", ()=>{
     navigator.serviceWorker.register("sw.js").catch(()=>{});
