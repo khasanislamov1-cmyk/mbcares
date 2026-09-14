@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>MBCares · Контроль уборки</title>
+<meta name="theme-color" content="#1F3864">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --navy:#1F3864; --blue:#4472C4; --bg:#F5F7FA; --card:#FFFFFF;
+    --line:#E3E7EE; --text:#1B2430; --muted:#707A8A;
+    --ok:#2E7D46; --ok-bg:#E2EFDA;
+    --warn:#B98400; --warn-bg:#FFF2CC;
+    --bad:#C00000; --bad-bg:#FFE2E2;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Inter","Segoe UI",system-ui,-apple-system,sans-serif;
+    -webkit-tap-highlight-color:transparent;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  #app{max-width:560px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column;}
+
+  /* Top bar */
+  .topbar{
+    background:var(--navy); color:#fff; padding:14px 16px calc(14px + env(safe-area-inset-top));
+    padding-top:calc(14px + env(safe-area-inset-top));
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    position:sticky; top:0; z-index:20;
+  }
+  .topbar h1{font-size:16px; margin:0; font-weight:600; line-height:1.3;}
+  .topbar .sub{font-size:12px; color:#B9C6E0; margin-top:2px;}
+  .iconbtn{
+    background:rgba(255,255,255,.12); border:none; color:#fff; width:36px; height:36px;
+    border-radius:10px; font-size:16px; display:flex; align-items:center; justify-content:center;
+  }
+  .iconbtn:active{background:rgba(255,255,255,.24);}
+
+  .view{padding:16px; flex:1; display:none;}
+  .view.active{display:block;}
+
+  /* Object select */
+  .obj-list{display:flex; flex-direction:column; gap:10px; margin-top:6px;}
+  .obj-item{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:16px; font-size:15px; font-weight:600; color:var(--navy);
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .obj-item:active{background:#EEF2F8;}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px;}
+  .field input{
+    width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:10px;
+    font-size:15px; font-family:inherit; background:#fff;
+  }
+  .primary-btn{
+    width:100%; background:var(--navy); color:#fff; border:none; border-radius:12px;
+    padding:14px; font-size:15px; font-weight:600; margin-top:6px;
+  }
+  .primary-btn:active{background:#16294A;}
+
+  /* Calendar */
+  .cal-head{display:flex; align-items:center; justify-content:space-between; margin:4px 0 14px;}
+  .cal-head .month{font-size:17px; font-weight:700; color:var(--navy);}
+  .cal-nav{display:flex; gap:6px;}
+  .cal-nav button{
+    background:#fff; border:1px solid var(--line); width:34px; height:34px; border-radius:9px; font-size:15px; color:var(--navy);
+  }
+  .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
+  .cal-dow{text-align:center; font-size:11px; color:var(--muted); padding-bottom:4px;}
+  .cal-day{
+    aspect-ratio:1; background:#fff; border:1px solid var(--line); border-radius:10px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-size:13px; position:relative; color:var(--text);
+  }
+  .cal-day.empty{background:transparent; border:none;}
+  .cal-day .dot{width:7px; height:7px; border-radius:50%; margin-top:3px;}
+  .cal-day.today{border:2px solid var(--blue); font-weight:700;}
+  .cal-day.st-none .dot{background:#D5DAE2;}
+  .cal-day.st-partial .dot{background:var(--warn);}
+  .cal-day.st-done .dot{background:var(--ok);}
+  .cal-day.st-issue .dot{background:var(--bad);}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; margin-top:16px; font-size:12px; color:var(--muted);}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+  .legend i{width:8px; height:8px; border-radius:50%; display:inline-block;}
+
+  /* Day / checklist view */
+  .day-header{
+    display:flex; align-items:center; gap:10px; margin-bottom:4px;
+  }
+  .back-btn{background:none; border:none; color:var(--navy); font-size:20px; padding:4px 6px 4px 0;}
+  .day-title{font-size:16px; font-weight:700; color:var(--navy);}
+  .day-obj{font-size:12px; color:var(--muted);}
+
+  .progress-wrap{margin:12px 0 14px;}
+  .progress-bar{height:8px; background:var(--line); border-radius:6px; overflow:hidden;}
+  .progress-bar > div{height:100%; background:var(--blue); transition:width .25s;}
+  .progress-label{font-size:12px; color:var(--muted); margin-top:5px;}
+
+  .tabs{display:flex; gap:6px; background:#fff; border:1px solid var(--line); border-radius:12px; padding:4px; margin-bottom:16px;}
+  .tab{flex:1; text-align:center; padding:9px 4px; border-radius:9px; font-size:13px; font-weight:600; color:var(--muted);}
+  .tab.active{background:var(--navy); color:#fff;}
+
+  .section{margin-bottom:14px; background:#fff; border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
+  .section-head{
+    padding:12px 14px; background:#EEF2F8; color:var(--navy); font-size:13px; font-weight:700;
+    display:flex; align-items:center; justify-content:space-between;
+  }
+  .section-head .count{font-weight:500; color:var(--muted); font-size:12px;}
+  .item{padding:12px 14px; border-top:1px solid var(--line);}
+  .item-text{font-size:13.5px; line-height:1.4; margin-bottom:9px;}
+  .seg{display:flex; gap:6px;}
+  .seg button{
+    flex:1; padding:9px 0; border-radius:9px; border:1px solid var(--line); background:#fff; font-size:15px;
+  }
+  .seg button.sel-ok{background:var(--ok-bg); border-color:var(--ok); }
+  .seg button.sel-warn{background:var(--warn-bg); border-color:var(--warn);}
+  .seg button.sel-bad{background:var(--bad-bg); border-color:var(--bad);}
+  .comment{
+    margin-top:9px; width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 10px;
+    font-size:13px; font-family:inherit; resize:vertical; min-height:44px; display:none;
+  }
+  .comment.show{display:block;}
+
+  .subhead{font-size:12px; font-weight:700; color:var(--muted); margin:18px 2px 8px; text-transform:uppercase; letter-spacing:.03em;}
+
+  .save-flag{
+    position:fixed; left:50%; transform:translateX(-50%); bottom:18px; background:var(--navy); color:#fff;
+    padding:8px 16px; border-radius:20px; font-size:12px; opacity:0; transition:opacity .25s; pointer-events:none; z-index:50;
+  }
+  .save-flag.show{opacity:1;}
+
+  .done-btn{
+    position:sticky; bottom:0; background:var(--bg); padding:12px 0 6px; margin-top:8px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="topbar">
+    <div>
+      <h1 id="topTitle">MBCares · Контроль уборки</h1>
+      <div class="sub" id="topSub"></div>
+    </div>
+    <button class="iconbtn" id="objSwitchBtn" title="Сменить объект">⇄</button>
+  </div>
+
+  <!-- ONBOARDING -->
+  <div class="view active" id="view-onboard">
+    <div class="field">
+      <label>Ваше имя</label>
+      <input id="nameInput" type="text" placeholder="Например: Гулноза">
+    </div>
+    <div class="subhead" style="margin-top:20px;">Выберите объект (ЖК)</div>
+    <div class="obj-list" id="objList"></div>
+    <button class="primary-btn" id="continueBtn" style="margin-top:18px;">Продолжить</button>
+  </div>
+
+  <!-- CALENDAR -->
+  <div class="view" id="view-calendar">
+    <div class="cal-head">
+      <button class="iconbtn" style="background:#fff;border:1px solid var(--line);color:var(--navy);" id="prevMonth">‹</button>
+      <div class="month" id="monthLabel">—</div>
+      <button class="iconbtn" style="background:#fff;border:1px solid var(--line);color:var(--navy);" id="nextMonth">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="legend">
+      <span><i style="background:#D5DAE2"></i>Не заполнено</span>
+      <span><i style="background:var(--warn)"></i>Частично</span>
+      <span><i style="background:var(--ok)"></i>Готово</span>
+      <span><i style="background:var(--bad)"></i>Есть нарушения</span>
+    </div>
+  </div>
+
+  <!-- DAY / CHECKLIST -->
+  <div class="view" id="view-day">
+    <div class="day-header">
+      <button class="back-btn" id="backBtn">←</button>
+      <div>
+        <div class="day-title" id="dayTitle">—</div>
+        <div class="day-obj" id="dayObj">—</div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="main" id="tabMain">Чек-лист контроля</div>
+      <div class="tab" data-tab="express" id="tabExpress">Туалеты (экспресс)</div>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-bar"><div id="progressFill" style="width:0%"></div></div>
+      <div class="progress-label" id="progressLabel">0 / 0 отмечено</div>
+    </div>
+
+    <div id="mainPanel"></div>
+    <div id="expressPanel" style="display:none;"></div>
+
+    <div class="done-btn"><button class="primary-btn" id="doneBtn">Готово — вернуться к календарю</button></div>
+  </div>
+
+</div>
+
+<div class="save-flag" id="saveFlag">Сохранено</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script>
+/* ============================================================
+   НАСТРОЙКА FIREBASE — вставьте сюда конфиг вашего проекта
+   (Firebase Console → Project settings → General → Your apps → SDK setup)
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDOsAFeAreln5q43l7s0j57fCjUcrmiD7M",
+  authDomain: "mbcares.firebaseapp.com",
+  databaseURL: "https://mbcares-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "mbcares",
+  storageBucket: "mbcares.firebasestorage.app",
+  messagingSenderId: "535715037446",
+  appId: "1:535715037446:web:2fde13f54f9c9cb8889e87"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+/* ============================================================
+   ДАННЫЕ: объекты и структура чек-листов
+   ============================================================ */
+const OBJECTS = [
+  {id:"soy-boyi", name:"Сой Бо'йи"},
+  {id:"regnum-plaza", name:"Регнум Плаза"},
+  {id:"felicita", name:"Феличита"},
+  {id:"dostlar", name:"Дустлар"},
+  {id:"nest-one", name:"Nest One"},
+  {id:"kislorod", name:"Кислород"},
+];
+
+const MAIN_SECTIONS = [
+  {title:"1. Подъезды и блоки — ежедневная уборка", items:[
+    "Пол в подъезде — влажная уборка, нет грязи и пятен",
+    "Мраморные поверхности — без разводов и налёта",
+    "Пепельницы — очищены",
+    "Двери и окна подъезда — без пятен и отпечатков пальцев",
+    "Лобби и зона входа — чисто, нет мусора и пятен",
+    "Вестибюли всех этажей — убраны, нет мусора",
+    "Интерьер и двери лифта — чистые, без загрязнений",
+    "Пожарные лестницы — убраны",
+    "Отчёт о неисправностях/поломках передан менеджеру",
+  ]},
+  {title:"2. Подъезды и блоки — еженедельная уборка", items:[
+    "Перила и поручни — вымыты, отполированы, без пятен и разводов",
+    "Двери аварийных выходов — вымыты полностью",
+    "Зеркала в МОП и оконные фасады — прозрачные, без разводов",
+    "Доски объявлений — вымыты, устаревшие объявления удалены",
+    "Блочная парадная лестница — влажная уборка ступеней",
+    "Технические и подсобные помещения — убраны",
+    "Столы и предметы в блоках — протёрты",
+  ]},
+  {title:"3. Подъезды и блоки — раз в 15 дней", items:[
+    "Интерьер лифта — полная очистка, полировка металлических поверхностей",
+    "Лифтовый мрамор — очищен и отполирован",
+    "Окна на этажах — вымыты (внутренняя сторона)",
+    "Трубы и счётчики — вымыты и протёрты",
+    "Колонны и плинтусы — вымыты",
+    "Мраморный пол в лобби и на этажах — отполирован",
+    "Противопожарные щиты и дверные косяки — протёрты, комплектность OK",
+    "Подвальные помещения — убраны",
+    "Почтовые ящики — вымыты снаружи",
+    "Пыль в труднодоступных местах (высокие поверхности) — удалена",
+  ]},
+  {title:"4. Общая территория — ежедневная уборка", items:[
+    "Урны на территории — опорожнены и вымыты",
+    "Мусоросборочные баки подвала — опорожнены",
+    "Внешние мусоросборочные пункты — убраны",
+    "Подземная парковка — убрана",
+    "Детская площадка — убрана, нет мусора и посторонних предметов",
+    "Зона фонтанов — убрана",
+    "Территория по периметру / ландшафт — убраны",
+    "КПП-зона (внутренняя) — убрана",
+  ]},
+  {title:"5. Общая территория — еженедельная уборка", items:[
+    "КПП-зона — окна, перила, ограждения, навесы вымыты",
+    "Перила и ограждения внешних стен блоков — вымыты",
+    "Колодцы для сточных вод — проверены и очищены",
+    "Котельные и машинные отделения — убраны",
+    "Входы коридоров блоков, лифтовые кабины — убраны",
+    "Парковочная зона, подвальные помещения, вентшахты, люки — убраны",
+  ]},
+  {title:"6. Туалетные помещения — контроль качества", items:[
+    "Пол — без пятен, разводов и мусора, сухой",
+    "Раковины — чистые, без налёта, смесители работают",
+    "Унитазы / писсуары / биде — дезинфицированы, без налёта и запаха",
+    "Сиденья унитаза — чистые, сухие",
+    "Зеркала — прозрачные, без разводов",
+    "Двери и перегородки — без пятен и отпечатков",
+    "Контейнеры для отходов — опорожнены, чистые",
+    "Сушилка для рук — работает, чистая",
+    "Туалетная бумага — в наличии (держатель заполнен)",
+    "Жидкое мыло — в наличии (диспенсер заполнен)",
+    "Освежитель воздуха — работает, приятный запах",
+    "Форма уборщицы «каждые 2 часа» — заполнена и подписана",
+  ]},
+  {title:"7. Стандарты сервиса и персонал", items:[
+    "Уборщица — внешний вид опрятный, форма одета",
+    "Уборщица — вежлива с жильцами, приветствует при встрече",
+    "Уборщица — не использует запрещённые фразы",
+    "Инвентарь и химия хранятся в отведённом месте",
+    "Тележка/инвентарь — чистые, в исправном состоянии",
+    "Сигналы о неисправностях переданы в нужный срок",
+    "Журнал забытых/утерянных вещей (форма 01-005 УБ) — ведётся корректно",
+  ]},
+];
+
+const EXPRESS_POINTS = [
+  "Пол — чистый, сухой, без мусора",
+  "Раковины — без налёта, смесители работают",
+  "Унитазы / писсуары / биде — дезинфицированы",
+  "Сиденья — чистые и сухие",
+  "Зеркала — без разводов",
+  "Двери и перегородки — без пятен",
+  "Контейнеры для отходов — опорожнены",
+  "Сушилка для рук — работает, чистая",
+  "Туалетная бумага — в наличии",
+  "Жидкое мыло — в наличии",
+  "Освежитель воздуха — работает",
+  "Общий запах — нормальный",
+];
+
+const MAIN_TOTAL = MAIN_SECTIONS.reduce((s,sec)=>s+sec.items.length,0);
+const EXPRESS_TOTAL = EXPRESS_POINTS.length * 2 + 1; // male + female + forma
+
+/* ============================================================
+   STATE
+   ============================================================ */
+let state = {
+  name: localStorage.getItem("mb_name") || "",
+  objectId: localStorage.getItem("mb_object") || null,
+  calMonth: new Date().getMonth(),
+  calYear: new Date().getFullYear(),
+  selectedDate: null,       // "YYYY-MM-DD"
+  activeTab: "main",
+  cache: {},                 // dateKey -> {main:{...}, express:{...}}
+  monthStatus: {}            // dateKey -> status string
+};
+
+const MONTHS_RU = ["Январь","Февраль","Март","Апрель","Май","Июнь","Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"];
+const DOW_RU = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+
+function pad2(n){return n<10?"0"+n:""+n;}
+function dateKey(y,m,d){return `${y}-${pad2(m+1)}-${pad2(d)}`;}
+function objName(id){const o=OBJECTS.find(o=>o.id===id); return o?o.name:"—";}
+
+/* ============================================================
+   NAVIGATION
+   ============================================================ */
+function showView(id){
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+function goCalendar(){
+  document.getElementById("topSub").textContent = objName(state.objectId) + (state.name?" · "+state.name:"");
+  document.getElementById("objSwitchBtn").style.display = "flex";
+  renderCalendar();
+  showView("view-calendar");
+}
+
+function goDay(key){
+  state.selectedDate = key;
+  state.activeTab = "main";
+  loadDay(key).then(()=>{
+    renderDay();
+    showView("view-day");
+  });
+}
+
+/* ============================================================
+   ONBOARDING
+   ============================================================ */
+function renderObjectList(){
+  const wrap = document.getElementById("objList");
+  wrap.innerHTML = "";
+  OBJECTS.forEach(o=>{
+    const el = document.createElement("div");
+    el.className = "obj-item";
+    el.dataset.id = o.id;
+    el.innerHTML = `<span>${o.name}</span><span>${state.objectId===o.id?"✓":"›"}</span>`;
+    if(state.objectId===o.id) el.style.outline = "2px solid var(--blue)";
+    el.onclick = ()=>{
+      state.objectId = o.id;
+      renderObjectList();
+    };
+    wrap.appendChild(el);
+  });
+}
+
+document.getElementById("nameInput").value = state.name;
+renderObjectList();
+
+document.getElementById("continueBtn").onclick = ()=>{
+  const name = document.getElementById("nameInput").value.trim();
+  if(!state.objectId){ alert("Выберите объект"); return; }
+  state.name = name;
+  localStorage.setItem("mb_name", name);
+  localStorage.setItem("mb_object", state.objectId);
+  goCalendar();
+};
+
+document.getElementById("objSwitchBtn").onclick = ()=>{
+  showView("view-onboard");
+  document.getElementById("objSwitchBtn").style.display = "none";
+};
+
+/* ============================================================
+   CALENDAR
+   ============================================================ */
+function renderCalendar(){
+  const y = state.calYear, m = state.calMonth;
+  document.getElementById("monthLabel").textContent = `${MONTHS_RU[m]} ${y}`;
+  const grid = document.getElementById("calGrid");
+  grid.innerHTML = "";
+  DOW_RU.forEach(d=>{
+    const el = document.createElement("div");
+    el.className = "cal-dow"; el.textContent = d;
+    grid.appendChild(el);
+  });
+  const first = new Date(y,m,1);
+  let startDow = first.getDay(); // 0=Sun
+  startDow = (startDow===0)?6:startDow-1; // make Monday=0
+  const daysInMonth = new Date(y,m+1,0).getDate();
+  const todayKey = dateKey(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+
+  for(let i=0;i<startDow;i++){
+    const el = document.createElement("div");
+    el.className="cal-day empty";
+    grid.appendChild(el);
+  }
+  for(let d=1; d<=daysInMonth; d++){
+    const key = dateKey(y,m,d);
+    const el = document.createElement("div");
+    el.className = "cal-day st-none" + (key===todayKey?" today":"");
+    el.innerHTML = `<div>${d}</div><div class="dot"></div>`;
+    el.onclick = ()=>goDay(key);
+    grid.appendChild(el);
+    applyDayStatus(key, el);
+    fetchDayStatus(state.objectId, key, el);
+  }
+}
+
+function computeStatus(data){
+  if(!data) return "none";
+  let total=0, filled=0, issue=false;
+  const walk = (obj)=>{
+    if(!obj) return;
+    Object.values(obj).forEach(v=>{
+      if(v && typeof v==="object" && "status" in v){
+        total++;
+        if(v.status){ filled++; if(v.status==="❌") issue=true; }
+      }
+    });
+  };
+  walk(data.main); walk(data.express);
+  if(total===0 || filled===0) return "none";
+  if(issue) return "issue";
+  if(filled<total) return "partial";
+  return "done";
+}
+
+function applyDayStatus(key, el){
+  const st = state.monthStatus[key];
+  if(!st) return;
+  el.classList.remove("st-none","st-partial","st-done","st-issue");
+  el.classList.add("st-"+st);
+}
+
+function fetchDayStatus(objectId, key, el){
+  if(!objectId) return;
+  db.ref(`checklists/${objectId}/${key}`).once("value").then(snap=>{
+    const st = computeStatus(snap.val());
+    state.monthStatus[key] = st;
+    applyDayStatus(key, el);
+  }).catch(()=>{});
+}
+
+document.getElementById("prevMonth").onclick = ()=>{
+  state.calMonth--; if(state.calMonth<0){state.calMonth=11; state.calYear--;}
+  renderCalendar();
+};
+document.getElementById("nextMonth").onclick = ()=>{
+  state.calMonth++; if(state.calMonth>11){state.calMonth=0; state.calYear++;}
+  renderCalendar();
+};
+document.getElementById("backBtn").onclick = goCalendar;
+document.getElementById("doneBtn").onclick = goCalendar;
+
+/* ============================================================
+   DAY / CHECKLIST
+   ============================================================ */
+function loadDay(key){
+  if(state.cache[key]) return Promise.resolve(state.cache[key]);
+  return db.ref(`checklists/${state.objectId}/${key}`).once("value").then(snap=>{
+    const data = snap.val() || {main:{}, express:{}};
+    if(!data.main) data.main = {};
+    if(!data.express) data.express = {};
+    state.cache[key] = data;
+    return data;
+  });
+}
+
+function fmtDateHuman(key){
+  const [y,m,d] = key.split("-").map(Number);
+  return `${d} ${MONTHS_RU[m-1].toLowerCase()} ${y}`;
+}
+
+function renderDay(){
+  const key = state.selectedDate;
+  document.getElementById("dayTitle").textContent = fmtDateHuman(key);
+  document.getElementById("dayObj").textContent = objName(state.objectId) + (state.name?" · "+state.name:"");
+  renderTabs();
+  renderMainPanel();
+  renderExpressPanel();
+  updateProgress();
+}
+
+function renderTabs(){
+  document.getElementById("tabMain").classList.toggle("active", state.activeTab==="main");
+  document.getElementById("tabExpress").classList.toggle("active", state.activeTab==="express");
+  document.getElementById("mainPanel").style.display = state.activeTab==="main" ? "block":"none";
+  document.getElementById("expressPanel").style.display = state.activeTab==="express" ? "block":"none";
+}
+document.getElementById("tabMain").onclick = ()=>{state.activeTab="main"; renderTabs();};
+document.getElementById("tabExpress").onclick = ()=>{state.activeTab="express"; renderTabs();};
+
+function itemRow(idPath, text){
+  const data = getVal(idPath) || {};
+  const row = document.createElement("div");
+  row.className = "item";
+  row.innerHTML = `
+    <div class="item-text">${text}</div>
+    <div class="seg">
+      <button data-v="✅" class="${data.status==='✅'?'sel-ok':''}">✅</button>
+      <button data-v="⚠" class="${data.status==='⚠'?'sel-warn':''}">⚠</button>
+      <button data-v="❌" class="${data.status==='❌'?'sel-bad':''}">❌</button>
+    </div>
+    <textarea class="comment ${(data.status==='⚠'||data.status==='❌')?'show':''}" placeholder="Комментарий / что не так...">${data.comment||""}</textarea>
+  `;
+  const seg = row.querySelector(".seg");
+  const textarea = row.querySelector(".comment");
+  seg.querySelectorAll("button").forEach(btn=>{
+    btn.onclick = ()=>{
+      const v = btn.dataset.v;
+      const cur = getVal(idPath) || {};
+      const newStatus = cur.status===v ? "" : v;
+      setVal(idPath, {status:newStatus, comment:cur.comment||"", ts:Date.now(), by:state.name});
+      seg.querySelectorAll("button").forEach(b=>b.classList.remove("sel-ok","sel-warn","sel-bad"));
+      if(newStatus==="✅") btn.classList.add("sel-ok");
+      if(newStatus==="⚠") btn.classList.add("sel-warn");
+      if(newStatus==="❌") btn.classList.add("sel-bad");
+      textarea.classList.toggle("show", newStatus==="⚠"||newStatus==="❌");
+      updateProgress();
+      queueSave();
+    };
+  });
+  textarea.oninput = ()=>{
+    const cur = getVal(idPath) || {};
+    setVal(idPath, {...cur, comment:textarea.value, ts:Date.now(), by:state.name});
+    queueSave();
+  };
+  return row;
+}
+
+function getVal(path){
+  const parts = path.split(".");
+  let obj = state.cache[state.selectedDate];
+  for(const p of parts){ obj = obj ? obj[p] : undefined; }
+  return obj;
+}
+function setVal(path, value){
+  const parts = path.split(".");
+  let obj = state.cache[state.selectedDate];
+  for(let i=0;i<parts.length-1;i++){
+    if(!obj[parts[i]]) obj[parts[i]] = {};
+    obj = obj[parts[i]];
+  }
+  obj[parts[parts.length-1]] = value;
+}
+
+function renderMainPanel(){
+  const panel = document.getElementById("mainPanel");
+  panel.innerHTML = "";
+  MAIN_SECTIONS.forEach((sec, si)=>{
+    const secEl = document.createElement("div");
+    secEl.className = "section";
+    const head = document.createElement("div");
+    head.className = "section-head";
+    head.innerHTML = `<span>${sec.title}</span><span class="count"></span>`;
+    secEl.appendChild(head);
+    sec.items.forEach((text, ii)=>{
+      const path = `main.s${si}_${ii}`;
+      secEl.appendChild(itemRow(path, text));
+    });
+    panel.appendChild(secEl);
+  });
+}
+
+function renderExpressPanel(){
+  const panel = document.getElementById("expressPanel");
+  panel.innerHTML = "";
+  ["male","female"].forEach(gender=>{
+    const secEl = document.createElement("div");
+    secEl.className = "section";
+    const head = document.createElement("div");
+    head.className = "section-head";
+    head.innerHTML = `<span>${gender==="male"?"Мужская уборная":"Женская уборная"}</span><span class="count"></span>`;
+    secEl.appendChild(head);
+    EXPRESS_POINTS.forEach((text, ii)=>{
+      const path = `express.${gender}_${ii}`;
+      secEl.appendChild(itemRow(path, text));
+    });
+    panel.appendChild(secEl);
+  });
+  // forma row
+  const secEl = document.createElement("div");
+  secEl.className = "section";
+  secEl.innerHTML = `<div class="section-head"><span>Форма уборщицы (каждые 2 ч.)</span></div>`;
+  const row = document.createElement("div");
+  row.className = "item";
+  const data = getVal("express.forma") || {};
+  row.innerHTML = `
+    <div class="item-text">Форма заполнена и подписана?</div>
+    <div class="seg">
+      <button data-v="Да" class="${data.status==='Да'?'sel-ok':''}">Да</button>
+      <button data-v="Нет" class="${data.status==='Нет'?'sel-bad':''}">Нет</button>
+    </div>`;
+  row.querySelectorAll(".seg button").forEach(btn=>{
+    btn.onclick = ()=>{
+      const v = btn.dataset.v;
+      const cur = getVal("express.forma") || {};
+      const newStatus = cur.status===v ? "" : v;
+      setVal("express.forma", {status:newStatus, ts:Date.now(), by:state.name});
+      row.querySelectorAll(".seg button").forEach(b=>b.classList.remove("sel-ok","sel-bad"));
+      if(newStatus==="Да") btn.classList.add("sel-ok");
+      if(newStatus==="Нет") btn.classList.add("sel-bad");
+      updateProgress();
+      queueSave();
+    };
+  });
+  secEl.appendChild(row);
+  panel.appendChild(secEl);
+}
+
+function updateProgress(){
+  const data = state.cache[state.selectedDate];
+  let total=0, filled=0;
+  const walk = (obj)=>{ if(!obj) return; Object.values(obj).forEach(v=>{
+    if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
+  });};
+  walk(data.main); walk(data.express);
+  const pct = total? Math.round(filled/total*100) : 0;
+  document.getElementById("progressFill").style.width = pct+"%";
+  document.getElementById("progressLabel").textContent = `${filled} / ${total} отмечено`;
+}
+
+/* ============================================================
+   SAVE (debounced)
+   ============================================================ */
+let saveTimer = null;
+function queueSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doSave, 600);
+}
+function doSave(){
+  const key = state.selectedDate;
+  const data = state.cache[key];
+  db.ref(`checklists/${state.objectId}/${key}`).set(data).then(()=>{
+    state.monthStatus[key] = computeStatus(data);
+    flashSaved();
+  }).catch(err=>{
+    console.error("Save error", err);
+  });
+}
+function flashSaved(){
+  const el = document.getElementById("saveFlag");
+  el.classList.add("show");
+  setTimeout(()=>el.classList.remove("show"), 1200);
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+if(state.objectId){
+  goCalendar();
+} else {
+  document.getElementById("objSwitchBtn").style.display = "none";
+}
+
+/* Register service worker for offline/installable PWA */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
