@@ -428,6 +428,10 @@ function pad2(n){return n<10?"0"+n:""+n;}
 function dateKey(y,m,d){return `${y}-${pad2(m+1)}-${pad2(d)}`;}
 function objName(id){const o=OBJECTS.find(o=>o.id===id); return o?o.name:"—";}
 function currentRole(){ return ROLES[state.role]; }
+/* Cache and calendar status must be scoped per role+object, not just per date —
+   otherwise switching role/object on the same date reuses another role's data
+   shape and crashes when writing. */
+function scopeKey(dateKey){ return `${state.role}|${state.objectId}|${dateKey}`; }
 function tabLabel(tabId){ const t=currentRole().tabs.find(t=>t.id===tabId); return t?t.label:tabId; }
 
 function applyAccent(){
@@ -559,7 +563,7 @@ function computeStatus(data){
 }
 
 function applyDayStatus(key, el){
-  const st = state.monthStatus[key];
+  const st = state.monthStatus[scopeKey(key)];
   if(!st) return;
   el.classList.remove("st-none","st-partial","st-done","st-issue");
   el.classList.add("st-"+st);
@@ -568,7 +572,7 @@ function fetchDayStatus(key, el){
   if(!state.objectId || !state.role) return;
   db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}`).once("value").then(snap=>{
     const st = computeStatus(snap.val());
-    state.monthStatus[key] = st;
+    state.monthStatus[scopeKey(key)] = st;
     applyDayStatus(key, el);
   }).catch(()=>{});
 }
@@ -588,11 +592,12 @@ document.getElementById("doneBtn").onclick = goCalendar;
    DAY
    ============================================================ */
 function loadDay(key){
-  if(state.cache[key]) return Promise.resolve(state.cache[key]);
+  const sk = scopeKey(key);
+  if(state.cache[sk]) return Promise.resolve(state.cache[sk]);
   return db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}`).once("value").then(snap=>{
     const data = snap.val() || {};
     currentRole().tabs.forEach(t=>{ if(!data[t.id]) data[t.id] = {}; });
-    state.cache[key] = data;
+    state.cache[sk] = data;
     return data;
   });
 }
@@ -603,13 +608,13 @@ function fmtDateHuman(key){
 }
 
 function getVal(group, path){
-  let obj = state.cache[state.selectedDate][group];
+  let obj = state.cache[scopeKey(state.selectedDate)][group];
   const parts = path.split(".");
   for(const p of parts){ obj = obj ? obj[p] : undefined; }
   return obj;
 }
 function setVal(group, path, value){
-  let obj = state.cache[state.selectedDate][group];
+  let obj = state.cache[scopeKey(state.selectedDate)][group];
   const parts = path.split(".");
   for(let i=0;i<parts.length-1;i++){
     if(!obj[parts[i]]) obj[parts[i]] = {};
@@ -619,7 +624,7 @@ function setVal(group, path, value){
 }
 
 function groupStatus(group){
-  const data = state.cache[state.selectedDate][group] || {};
+  const data = state.cache[scopeKey(state.selectedDate)][group] || {};
   let total=0, filled=0, issue=false;
   Object.entries(data).forEach(([k,v])=>{
     if(k==="_meta") return;
@@ -781,13 +786,13 @@ function updateProgress(){
   const roleObj = currentRole();
   let total=0, filled=0;
   if(roleObj.id === "cleaning"){
-    const data = state.cache[state.selectedDate][state.activeTab] || {};
+    const data = state.cache[scopeKey(state.selectedDate)][state.activeTab] || {};
     Object.entries(data).forEach(([k,v])=>{
       if(k==="_meta") return;
       if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
     });
   } else {
-    const data = state.cache[state.selectedDate][state.activeTab] || {};
+    const data = state.cache[scopeKey(state.selectedDate)][state.activeTab] || {};
     Object.entries(data).forEach(([k,v])=>{
       if(k==="_meta") return;
       if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
@@ -808,9 +813,9 @@ function queueSave(){
 }
 function doSave(){
   const key = state.selectedDate;
-  const data = state.cache[key];
+  const data = state.cache[scopeKey(key)];
   db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}`).set(data).then(()=>{
-    state.monthStatus[key] = computeStatus(data);
+    state.monthStatus[scopeKey(key)] = computeStatus(data);
     flashSaved();
   }).catch(err=>console.error("Save error", err));
 }
