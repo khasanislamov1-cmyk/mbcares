@@ -1479,6 +1479,8 @@ function itemRow(group, path, text, opts){
     ? `<div style="font-size:11px; font-weight:700; color:var(--accent); margin-bottom:3px;">🕐 ${opts.timeLabel}</div>`
     : "";
   const scoreClass = (n)=> n<=2 ? "sel-bad" : (n===3 ? "sel-warn" : "sel-ok");
+  const metaText = (d)=> d && d.status ? `${fmtTime(d.ts)}${d.by ? " · "+d.by : ""}` : "";
+  const metaHtml = `<div class="item-meta" style="font-size:10.5px; color:var(--muted); margin-top:5px;">${metaText(data)}</div>`;
 
   if(!isEditable()){
     const row = document.createElement("div");
@@ -1491,6 +1493,7 @@ function itemRow(group, path, text, opts){
         ${timeHtml}
         <div class="item-text">${text}</div>
         ${badgeHtml}
+        ${metaHtml}
         ${data.comment ? `<div class="comment show" style="background:#F5F7FA; color:var(--text);">${data.comment}</div>` : ""}
       `;
       return row;
@@ -1507,6 +1510,7 @@ function itemRow(group, path, text, opts){
       ${timeHtml}
       <div class="item-text">${text}</div>
       ${badgeHtml}
+      ${metaHtml}
       ${data.comment ? `<div class="comment show" style="background:#F5F7FA; color:var(--text);">${data.comment}</div>` : ""}
     `;
     return row;
@@ -1521,25 +1525,31 @@ function itemRow(group, path, text, opts){
       <div class="seg">
         ${[1,2,3,4,5].map(n=>`<button data-v="${n}" class="${+data.status===n?scoreClass(n):''}">${n}</button>`).join("")}
       </div>
+      ${metaHtml}
       <textarea class="comment ${data.status && +data.status<=3 ?'show':''}" placeholder="Нарушение / примечание...">${data.comment||""}</textarea>
     `;
     const seg = row.querySelector(".seg");
     const textarea = row.querySelector(".comment");
+    const metaEl = row.querySelector(".item-meta");
     seg.querySelectorAll("button").forEach(btn=>{
       btn.onclick = ()=>{
         const v = btn.dataset.v;
         const cur = getVal(group, path) || {};
         const newStatus = String(cur.status)===v ? "" : v;
-        setVal(group, path, {status:newStatus, comment:cur.comment||"", ts:Date.now(), by:state.name});
+        const rec = {status:newStatus, comment:cur.comment||"", ts:Date.now(), by:state.name};
+        setVal(group, path, rec);
         seg.querySelectorAll("button").forEach(b=>b.classList.remove("sel-ok","sel-warn","sel-bad"));
         if(newStatus) btn.classList.add(scoreClass(+newStatus));
         textarea.classList.toggle("show", !!newStatus && +newStatus<=3);
+        metaEl.textContent = metaText(rec);
         updateProgress(); renderTabs(); queueSave();
       };
     });
     textarea.oninput = ()=>{
       const cur = getVal(group, path) || {};
-      setVal(group, path, {...cur, comment:textarea.value, ts:Date.now(), by:state.name});
+      const rec = {...cur, comment:textarea.value, ts:Date.now(), by:state.name};
+      setVal(group, path, rec);
+      metaEl.textContent = metaText(rec);
       queueSave();
     };
     return row;
@@ -1551,16 +1561,20 @@ function itemRow(group, path, text, opts){
       <div class="seg">
         <button data-v="Да" class="${data.status==='Да'?'sel-ok':''}">Да</button>
         <button data-v="Нет" class="${data.status==='Нет'?'sel-bad':''}">Нет</button>
-      </div>`;
+      </div>
+      ${metaHtml}`;
+    const metaEl = row.querySelector(".item-meta");
     row.querySelectorAll(".seg button").forEach(btn=>{
       btn.onclick = ()=>{
         const v = btn.dataset.v;
         const cur = getVal(group, path) || {};
         const newStatus = cur.status===v ? "" : v;
-        setVal(group, path, {status:newStatus, ts:Date.now(), by:state.name});
+        const rec = {status:newStatus, ts:Date.now(), by:state.name};
+        setVal(group, path, rec);
         row.querySelectorAll(".seg button").forEach(b=>b.classList.remove("sel-ok","sel-bad"));
         if(newStatus==="Да") btn.classList.add("sel-ok");
         if(newStatus==="Нет") btn.classList.add("sel-bad");
+        metaEl.textContent = metaText(rec);
         updateProgress(); renderTabs(); queueSave();
       };
     });
@@ -1574,27 +1588,33 @@ function itemRow(group, path, text, opts){
       <button data-v="⚠" class="${data.status==='⚠'?'sel-warn':''}">⚠</button>
       <button data-v="❌" class="${data.status==='❌'?'sel-bad':''}">❌</button>
     </div>
+    ${metaHtml}
     <textarea class="comment ${(data.status==='⚠'||data.status==='❌')?'show':''}" placeholder="Комментарий / что не так...">${data.comment||""}</textarea>
   `;
   const seg = row.querySelector(".seg");
   const textarea = row.querySelector(".comment");
+  const metaEl = row.querySelector(".item-meta");
   seg.querySelectorAll("button").forEach(btn=>{
     btn.onclick = ()=>{
       const v = btn.dataset.v;
       const cur = getVal(group, path) || {};
       const newStatus = cur.status===v ? "" : v;
-      setVal(group, path, {status:newStatus, comment:cur.comment||"", ts:Date.now(), by:state.name});
+      const rec = {status:newStatus, comment:cur.comment||"", ts:Date.now(), by:state.name};
+      setVal(group, path, rec);
       seg.querySelectorAll("button").forEach(b=>b.classList.remove("sel-ok","sel-warn","sel-bad"));
       if(newStatus==="✅") btn.classList.add("sel-ok");
       if(newStatus==="⚠") btn.classList.add("sel-warn");
       if(newStatus==="❌") btn.classList.add("sel-bad");
       textarea.classList.toggle("show", newStatus==="⚠"||newStatus==="❌");
+      metaEl.textContent = metaText(rec);
       updateProgress(); renderTabs(); queueSave();
     };
   });
   textarea.oninput = ()=>{
     const cur = getVal(group, path) || {};
-    setVal(group, path, {...cur, comment:textarea.value, ts:Date.now(), by:state.name});
+    const rec = {...cur, comment:textarea.value, ts:Date.now(), by:state.name};
+    setVal(group, path, rec);
+    metaEl.textContent = metaText(rec);
     queueSave();
   };
   return row;
