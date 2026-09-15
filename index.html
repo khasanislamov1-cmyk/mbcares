@@ -317,6 +317,11 @@ const ROLES = {
     id:"technician", label:"Техник", dbRoot:"tech", accent:"#2E8B77",
     tabs:[{id:"tasks", label:"Задачи смены"}],
     hasTimeField:false
+  },
+  audit: {
+    id:"audit", label:"Аудит объекта", dbRoot:"audits", accent:"#7A3B69",
+    tabs:[{id:"audit", label:"Чек-лист аудита"}],
+    hasTimeField:false, scoreMode:true, restricted:true
   }
 };
 
@@ -325,7 +330,6 @@ const OBJECTS = [
   {id:"regnum-plaza", name:"Регнум Плаза"},
   {id:"felicita", name:"Феличита"},
   {id:"dostlar", name:"Дустлар"},
-  {id:"nest-one", name:"Nest One"},
   {id:"kislorod", name:"Кислород"},
 ];
 
@@ -349,6 +353,93 @@ const TECH_TASKS = [
   {time:"21:00–21:45", text:"Обход-осмотр здания, санузлов, МОП"},
   {time:"22:00–22:15", text:"Контроль за работой насосов ХВС — давление и утечка воды"},
   {time:"23:00–23:15", text:"Обход-осмотр здания, санузлов, МОП, 1 этаж"},
+];
+
+/* ============================================================
+   AUDIT DATA — еженедельный объезд Управляющего объектами
+   Оценка по каждому пункту: 1 (критично) — 5 (отлично)
+   ============================================================ */
+const AUDIT_SECTIONS = [
+  {title:"1. МОП — места общего пользования", items:[
+    "Подъезды: чистота полов, стен, потолков — нет грязи, пятен, мусора",
+    "Лестничные клетки: чистота ступеней, перил, плинтусов",
+    "Холлы на этажах: чистота, отсутствие посторонних предметов",
+    "Лифты: чистота кабины, зеркал, полов, кнопок, дверей",
+    "Освещение в подъездах и лифтах, уличные и внутренние терр. — все лампочки работают",
+    "Почтовые ящики: в порядке, не заклинивают, нет мусора",
+    "Двери подъездов: исправны, самозакрываются, домофон работает",
+    "Технические помещения: заперты, не захламлены",
+  ]},
+  {title:"2. Территория и благоустройство", items:[
+    "Двор: уборка сделана, нет мусора, окурков, бытовых отходов",
+    "Контейнерная площадка: баки не переполнены, крышки закрыты, нет запаха",
+    "Парковка: разметка видна, нет посторонних авто вне мест",
+    "Газоны и клумбы: скошены, политы, нет сухих растений",
+    "Детская площадка: чистота, оборудование исправно, нет сколов/острых краёв",
+    "Зоны отдыха: скамейки и беседки в порядке, нет мусора",
+    "Освещение территории: все фонари работают",
+    "Ограждение и КПП: шлагбаум/ворота исправны, камеры работают",
+  ]},
+  {title:"3. Технические системы", items:[
+    "Сменное задание получено, приоритеты расставлены",
+    "Инструменты и ЗИП проверены",
+    "Форма и бейдж надеты",
+    "Заявки изучены / статус не закрытых заявок проверен",
+    "Бахилы при себе для работы в квартирах",
+    "Лифты: работают штатно, нет посторонних шумов, освещение, аварийная связь есть",
+    "Журнал ТО: заполнен и подписан",
+    "Водоснабжение: нет протечек в подвале, стояках, запахов",
+    "Насосная станция: оборудование работает, нет подтёков и протечек, давление в норме",
+    "Стояки в подвале (ХВС, ГВС и канализация): нет подтёков и запахов",
+    "Дренажные насосы паркинга: работают",
+    "Электрощитовые: заперты, нет посторонних запахов, освещение есть",
+    "Система пожарной сигнализации (АПС): индикаторы в норме, нет тревог",
+    "ТП: нет запаха гари, аварийных индикаторов",
+    "Генератор (при наличии): заправлен, готов к работе",
+    "Счётчик электроэнергии МОП: показания сняты (раз в месяц)",
+    "Огнетушители: на месте, срок не истёк",
+    "Дымоудаление и противопожарные клапаны: внешний вид в норме / исправны",
+    "Пожарные краны и рукава: исправны",
+    "Пути эвакуации: свободны, знаки освещены",
+    "Вентиляционные решётки: не засорены, не повреждены",
+    "ИТП/насосная: оборудование работает, нет подтёков и протечек",
+    "CCTV: количество рабочих камер из общего числа",
+    "Видеонаблюдение: камеры на месте, не повреждены, запись ведётся",
+    "СКУД: картридеры и замки работают",
+    "Шлагбаум/ворота: исправны",
+    "ГРП (при наличии): давление газа в норме, нет запаха газа",
+    "Тепловой узел/ИТП/котельная: температура и давление",
+    "Радиаторы МОП: нет протечек (выборочно)",
+  ]},
+  {title:"4. Охрана и безопасность", items:[
+    "Охранник на посту: присутствует, в форме, бодрствует",
+    "Журнал смены охраны заполнен корректно, без пропусков",
+    "Обходной лист ночной смены заполнен",
+    "Пропускной режим соблюдается: посетители регистрируются",
+    "Форма учёта авто и ремонтных бригад ведётся",
+    "КПП в порядке: стекло чистое, оборудование работает",
+    "Нет посторонних лиц на закрытой территории",
+  ]},
+  {title:"5. Клининг", items:[
+    "Форма и бейдж надеты, внешний вид опрятный",
+    "Уборщики/дворники на объекте, выполняют графики",
+    "Инвентарь клининга в наличии, в надлежащем состоянии",
+    "Химия и расходники: запас в норме, не истёк срок годности",
+    "График уборки МОП выполнен за день (отметки есть)",
+    "Санузлы общего пользования (если есть): чисто, запасы туалетной бумаги",
+    "Санитайзеры в холлах: заполнены",
+    "График уборки взят, объём работ известен, чек-лист уборки заполнен",
+  ]},
+  {title:"6. Работа команды", items:[
+    "Менеджер объекта на месте, доступен резидентам",
+    "Журнал обращений резидентов подан через MBCares, нет просроченных заявок",
+    "MBCares app: все заявки зафиксированы, просроченных нет",
+    "Доска объявлений / стенд: информация актуальная, не устаревшая",
+    "Жалобы и обращения с прошлого обхода — закрыты?",
+    "Реестр должников: плановые звонки выставлены (менеджер)",
+    "Плановые работы: жильцы уведомлены",
+    "Заявки на закупку (01-001 УПР) поданы своевременно",
+  ]},
 ];
 
 /* ============================================================
@@ -499,6 +590,7 @@ let state = {
   name: "",
   role: null,
   viewRole: null,   // used only when role === "manager": which section they're currently browsing
+  canAudit: false,  // only true for the specific managers allowed to see/fill the audit checklist
   objectId: null,
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
@@ -557,7 +649,7 @@ document.getElementById("logoutBtn").onclick = ()=>{
 
 auth.onAuthStateChanged(user=>{
   if(!user){
-    state.uid = null; state.role = null; state.viewRole = null; state.name = ""; state.objectId = null;
+    state.uid = null; state.role = null; state.viewRole = null; state.canAudit = false; state.name = ""; state.objectId = null;
     document.getElementById("topbar").style.display = "none";
     showView("view-login");
     return;
@@ -574,6 +666,7 @@ auth.onAuthStateChanged(user=>{
       return;
     }
     state.role = rec.role;
+    state.canAudit = !!rec.canAudit;
     if(isManager()) state.viewRole = "cleaning";
     state.name = rec.name || user.email;
     applyAccent();
@@ -604,13 +697,15 @@ function goSectionSelect(){
 function renderSectionList(){
   const wrap = document.getElementById("sectionList");
   wrap.innerHTML = "";
-  Object.values(ROLES).forEach(r=>{
-    const el = document.createElement("div");
-    el.className = "obj-item";
-    el.innerHTML = `<span>${r.label}</span><span>›</span>`;
-    el.onclick = ()=>{ state.viewRole = r.id; applyAccent(); goCalendar(); };
-    wrap.appendChild(el);
-  });
+  Object.values(ROLES)
+    .filter(r => !r.restricted || state.canAudit)
+    .forEach(r=>{
+      const el = document.createElement("div");
+      el.className = "obj-item";
+      el.innerHTML = `<span>${r.label}</span><span>›</span>`;
+      el.onclick = ()=>{ state.viewRole = r.id; applyAccent(); goCalendar(); };
+      wrap.appendChild(el);
+    });
 }
 function renderObjectList(){
   const wrap = document.getElementById("objList");
@@ -826,6 +921,12 @@ function resolveItemText(effRole, group, path){
       const task = TECH_TASKS[+m[1]];
       if(task) return {section: task.time, text: task.text};
     }
+  } else if(effRole === "audit"){
+    const m = path.match(/^a(\d+)_(\d+)$/);
+    if(m){
+      const sec = AUDIT_SECTIONS[+m[1]];
+      if(sec) return {section: sec.title, text: sec.items[+m[2]]};
+    }
   } else {
     const m = path.match(/^z(\d+)_(\d+)$/);
     if(m){
@@ -873,6 +974,8 @@ function loadAndRenderSummary(){
     db.ref(`${dbRoot}/${objectId}/${dk}`).once("value").then(snap=>({date:dk, data:snap.val()}))
   )).then(results=>{
     let ok=0, warn=0, bad=0;
+    let scoreSum=0, scoreCount=0;
+    const scoreMode = !!currentRole().scoreMode;
     const violations = [];
     const exportRows = []; // every marked item, for the CSV/Excel export
     results.forEach(({date, data})=>{
@@ -889,14 +992,27 @@ function loadAndRenderSummary(){
             date, roundLabel, section: info.section, text: info.text,
             status: v.status, comment: v.comment || "", by: v.by || "", time: fmtTime(v.ts)
           });
-          if(v.status === "✅") ok++;
-          else if(v.status === "⚠") warn++;
-          else if(v.status === "❌" || v.status === "Нет"){
-            bad++;
-            violations.push({
-              date, group, text: info.text, section: info.section,
-              comment: v.comment || "", by: v.by || "", ts: v.ts || 0, roundLabel
-            });
+          if(scoreMode){
+            const n = +v.status;
+            scoreSum += n; scoreCount++;
+            if(n<=2) bad++; else if(n===3) warn++; else ok++;
+            if(n<=2){
+              violations.push({
+                date, group, text: info.text, section: info.section,
+                comment: v.comment || "", by: v.by || "", ts: v.ts || 0, roundLabel,
+                scoreLabel: `${n}/5`
+              });
+            }
+          } else {
+            if(v.status === "✅") ok++;
+            else if(v.status === "⚠") warn++;
+            else if(v.status === "❌" || v.status === "Нет"){
+              bad++;
+              violations.push({
+                date, group, text: info.text, section: info.section,
+                comment: v.comment || "", by: v.by || "", ts: v.ts || 0, roundLabel
+              });
+            }
           }
         });
       });
@@ -904,6 +1020,9 @@ function loadAndRenderSummary(){
     lastSummaryExportRows = exportRows;
 
     const periodLabel = summaryPeriod===7 ? "за 7 дней" : "за 30 дней";
+    const avgLine = scoreMode && scoreCount
+      ? `<div style="text-align:center; font-size:13px; color:var(--muted); margin-top:10px;">Средняя оценка: <b style="color:var(--navy); font-size:15px;">${(scoreSum/scoreCount).toFixed(1)} / 5</b></div>`
+      : "";
     statsEl.innerHTML = `
       <div style="font-size:13px; color:var(--muted); margin-bottom:10px;">
         ${objName(state.objectId)} · ${currentRole().label} · ${periodLabel}
@@ -911,17 +1030,18 @@ function loadAndRenderSummary(){
       <div style="display:flex; gap:10px;">
         <div style="flex:1; text-align:center;">
           <div style="font-size:22px; font-weight:700; color:var(--ok);">${ok}</div>
-          <div style="font-size:12px; color:var(--muted);">✅ выполнено</div>
+          <div style="font-size:12px; color:var(--muted);">${scoreMode?"4–5 хорошо":"✅ выполнено"}</div>
         </div>
         <div style="flex:1; text-align:center;">
           <div style="font-size:22px; font-weight:700; color:var(--warn);">${warn}</div>
-          <div style="font-size:12px; color:var(--muted);">⚠ замечания</div>
+          <div style="font-size:12px; color:var(--muted);">${scoreMode?"3 удовл.":"⚠ замечания"}</div>
         </div>
         <div style="flex:1; text-align:center;">
           <div style="font-size:22px; font-weight:700; color:var(--bad);">${bad}</div>
-          <div style="font-size:12px; color:var(--muted);">❌ нарушения</div>
+          <div style="font-size:12px; color:var(--muted);">${scoreMode?"1–2 критично":"❌ нарушения"}</div>
         </div>
       </div>
+      ${avgLine}
     `;
 
     violations.sort((a,b)=> b.ts - a.ts || (a.date < b.date ? 1 : -1));
@@ -934,7 +1054,7 @@ function loadAndRenderSummary(){
         row.className = "item";
         row.style.background = "#fff"; row.style.border = "1px solid var(--line)"; row.style.borderRadius = "12px"; row.style.marginBottom = "8px";
         const dateHuman = fmtDateHuman(v.date);
-        const roundPart = v.roundLabel ? ` · обход ${v.roundLabel}` : "";
+        const roundPart = v.roundLabel ? ` · обход ${v.roundLabel}` : (v.scoreLabel ? ` · оценка ${v.scoreLabel}` : "");
         row.innerHTML = `
           <div style="font-size:11.5px; color:var(--muted); margin-bottom:4px;">${dateHuman}${roundPart}${v.by ? " · "+v.by : ""}</div>
           ${v.section ? `<div style="font-size:11px; color:var(--bad); font-weight:600; margin-bottom:2px;">${v.section}</div>` : ""}
@@ -1038,10 +1158,23 @@ function itemRow(group, path, text, opts){
   const timeHtml = opts.timeLabel
     ? `<div style="font-size:11px; font-weight:700; color:var(--accent); margin-bottom:3px;">🕐 ${opts.timeLabel}</div>`
     : "";
+  const scoreClass = (n)=> n<=2 ? "sel-bad" : (n===3 ? "sel-warn" : "sel-ok");
 
   if(!isEditable()){
     const row = document.createElement("div");
     row.className = "item";
+    if(opts.scoreMode){
+      const badgeHtml = data.status
+        ? `<span class="seg" style="max-width:160px;"><button class="${scoreClass(+data.status)}" style="pointer-events:none;">${data.status} / 5</button></span>`
+        : `<span style="color:var(--muted); font-size:13px;">— не оценено</span>`;
+      row.innerHTML = `
+        ${timeHtml}
+        <div class="item-text">${text}</div>
+        ${badgeHtml}
+        ${data.comment ? `<div class="comment show" style="background:#F5F7FA; color:var(--text);">${data.comment}</div>` : ""}
+      `;
+      return row;
+    }
     const badgeMap = {
       "✅": {cls:"sel-ok", label:"✅"}, "⚠": {cls:"sel-warn", label:"⚠"}, "❌": {cls:"sel-bad", label:"❌"},
       "Да": {cls:"sel-ok", label:"Да"}, "Нет": {cls:"sel-bad", label:"Нет"}
@@ -1061,6 +1194,36 @@ function itemRow(group, path, text, opts){
 
   const row = document.createElement("div");
   row.className = "item";
+  if(opts.scoreMode){
+    row.innerHTML = `
+      ${timeHtml}
+      <div class="item-text">${text}</div>
+      <div class="seg">
+        ${[1,2,3,4,5].map(n=>`<button data-v="${n}" class="${+data.status===n?scoreClass(n):''}">${n}</button>`).join("")}
+      </div>
+      <textarea class="comment ${data.status && +data.status<=3 ?'show':''}" placeholder="Нарушение / примечание...">${data.comment||""}</textarea>
+    `;
+    const seg = row.querySelector(".seg");
+    const textarea = row.querySelector(".comment");
+    seg.querySelectorAll("button").forEach(btn=>{
+      btn.onclick = ()=>{
+        const v = btn.dataset.v;
+        const cur = getVal(group, path) || {};
+        const newStatus = String(cur.status)===v ? "" : v;
+        setVal(group, path, {status:newStatus, comment:cur.comment||"", ts:Date.now(), by:state.name});
+        seg.querySelectorAll("button").forEach(b=>b.classList.remove("sel-ok","sel-warn","sel-bad"));
+        if(newStatus) btn.classList.add(scoreClass(+newStatus));
+        textarea.classList.toggle("show", !!newStatus && +newStatus<=3);
+        updateProgress(); renderTabs(); queueSave();
+      };
+    });
+    textarea.oninput = ()=>{
+      const cur = getVal(group, path) || {};
+      setVal(group, path, {...cur, comment:textarea.value, ts:Date.now(), by:state.name});
+      queueSave();
+    };
+    return row;
+  }
   if(opts.binary){
     row.innerHTML = `
       ${timeHtml}
@@ -1171,6 +1334,16 @@ function renderDayPanel(){
       secEl.appendChild(itemRow("tasks", `t${ti}`, task.text, {timeLabel: task.time}));
     });
     panel.appendChild(secEl);
+  } else if(roleObj.id === "audit"){
+    AUDIT_SECTIONS.forEach((sec, si)=>{
+      const secEl = document.createElement("div");
+      secEl.className = "section";
+      const head = document.createElement("div");
+      head.className = "section-head"; head.textContent = sec.title;
+      secEl.appendChild(head);
+      sec.items.forEach((text, ii)=> secEl.appendChild(itemRow("audit", `a${si}_${ii}`, text, {scoreMode:true})));
+      panel.appendChild(secEl);
+    });
   } else {
     ZONES.forEach((zone, zi)=>{
       const secEl = document.createElement("div");
