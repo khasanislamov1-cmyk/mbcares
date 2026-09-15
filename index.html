@@ -629,12 +629,6 @@ const MAIN_SECTIONS = [
    ежедневно / раз в неделю (пн) / 2 раза в неделю (пн+чт) / раз в 15 дней
    (1 и 16 числа) / раз в месяц (1 число). */
 const SECTION_FREQ = ["daily","weekly","biweekly","monthly","daily","weekly","twiceweekly","monthly","daily","daily"];
-const FREQ_LABEL = {
-  weekly:"Раз в неделю (пн)",
-  biweekly:"Раз в 15 дней (1 и 16)",
-  monthly:"Раз в месяц (1 число)",
-  twiceweekly:"2 раза в неделю (пн/чт)",
-};
 
 const EXPRESS_POINTS = [
   "Пол — чистый, сухой, без мусора",
@@ -943,18 +937,31 @@ function isFreqAllDoneOnDate(freq, dateObj){
     return ok && sectionItemPaths(si).every(p => isCycleDone("main", p, dateObj));
   }, true);
 }
-/* Which periodicities anchor on this particular calendar date (for the
-   little corner marker) — Monday=weekly, Mon+Thu=twiceweekly, 1st/16th=
-   biweekly, 1st=monthly. */
-function anchorFreqsForDate(dateObj){
-  const dow = dateObj.getDay(); // 0=Sun..6=Sat
-  const dom = dateObj.getDate();
-  const freqs = [];
-  if(dow === 1) freqs.push("weekly");
-  if(dow === 1 || dow === 4) freqs.push("twiceweekly");
-  if(dom === 1 || dom === 16) freqs.push("biweekly");
-  if(dom === 1) freqs.push("monthly");
-  return freqs;
+/* All non-daily periodicities actually used in MAIN_SECTIONS — these are
+   continuous, tiling cycles (every date belongs to exactly one week /
+   half-week / half-month / month), so they're relevant on every day —
+   an unfinished cycle keeps showing red on every subsequent day until it's
+   marked done, not just on its "start" day. */
+const ACTIVE_FREQS = Array.from(new Set(SECTION_FREQ.filter(f => f !== "daily")));
+/* Human label with the actual calendar date this cycle started on
+   (по просьбе — числа, а не дни недели типа "пн"/"чт"). */
+function freqAnchorLabel(freq, dateObj){
+  if(freq === "weekly"){
+    const d = parseDateKey(mondayKeyOf(dateObj));
+    return `Раз в неделю (с ${d.getDate()} числа)`;
+  }
+  if(freq === "twiceweekly"){
+    const monday = parseDateKey(mondayKeyOf(dateObj));
+    const dow = dateObj.getDay();
+    const anchor = (dow>=1 && dow<=3) ? monday : new Date(monday.getFullYear(), monday.getMonth(), monday.getDate()+3);
+    return `2 раза в неделю (с ${anchor.getDate()} числа)`;
+  }
+  if(freq === "biweekly"){
+    const anchorDay = dateObj.getDate() <= 15 ? 1 : 16;
+    return `Раз в 15 дней (с ${anchorDay} числа)`;
+  }
+  if(freq === "monthly") return `Раз в месяц (с 1 числа)`;
+  return "";
 }
 
 /* ============================================================
@@ -1252,21 +1259,18 @@ function renderCalendar(){
     grid.appendChild(el);
     applyDayStatus(key, el);
     fetchDayStatus(key, el);
-    if(effectiveRole() === "cleaning"){
+    if(effectiveRole() === "cleaning" && ACTIVE_FREQS.length){
       const dateObj = new Date(y, m, d);
-      const freqs = anchorFreqsForDate(dateObj);
-      if(freqs.length){
-        const allDone = freqs.every(f => isFreqAllDoneOnDate(f, dateObj));
-        const marker = document.createElement("div");
-        marker.style.position = "absolute";
-        marker.style.top = "-4px"; marker.style.right = "-4px";
-        marker.style.width = "10px"; marker.style.height = "10px";
-        marker.style.borderRadius = "50%";
-        marker.style.background = allDone ? "#2E7D46" : "#C00000";
-        marker.style.border = "2px solid #fff";
-        marker.title = freqs.map(f=>FREQ_LABEL[f]).join(" · ");
-        el.appendChild(marker);
-      }
+      const allDone = ACTIVE_FREQS.every(f => isFreqAllDoneOnDate(f, dateObj));
+      const marker = document.createElement("div");
+      marker.style.position = "absolute";
+      marker.style.top = "-4px"; marker.style.right = "-4px";
+      marker.style.width = "10px"; marker.style.height = "10px";
+      marker.style.borderRadius = "50%";
+      marker.style.background = allDone ? "#2E7D46" : "#C00000";
+      marker.style.border = "2px solid #fff";
+      marker.title = ACTIVE_FREQS.map(f=>freqAnchorLabel(f, dateObj)).join(" · ");
+      el.appendChild(marker);
     }
   }
 }
@@ -1616,11 +1620,11 @@ function itemRow(group, path, text, opts){
   const metaHtml = `<div class="item-meta" style="font-size:10.5px; color:var(--muted); margin-top:5px;">${metaText(data)}</div>`;
 
   const freq = itemFreq(group, path);
+  const freqDateObj = freq ? parseDateKey(state.selectedDate) : null;
   let freqHtml = "";
   if(freq){
-    const dateObj = parseDateKey(state.selectedDate);
-    const done = isCycleDone(group, path, dateObj);
-    freqHtml = `<div class="freq-badge" style="display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:8px; margin-bottom:7px; background:${done?'var(--ok-bg)':'var(--bad-bg)'}; color:${done?'var(--ok)':'var(--bad)'};">${done?'✓ ':'⏰ '}${FREQ_LABEL[freq]}${done?' — сделано':' — нужно в этом цикле'}</div>`;
+    const done = isCycleDone(group, path, freqDateObj);
+    freqHtml = `<div class="freq-badge" style="display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:8px; margin-bottom:7px; background:${done?'var(--ok-bg)':'var(--bad-bg)'}; color:${done?'var(--ok)':'var(--bad)'};">${done?'✓ ':'⏰ '}${freqAnchorLabel(freq, freqDateObj)}${done?' — сделано':' — нужно в этом цикле'}</div>`;
   }
 
   if(!isEditable()){
@@ -1754,7 +1758,7 @@ function itemRow(group, path, text, opts){
       if(freq && newStatus){
         const dateObj = parseDateKey(state.selectedDate);
         markCycleDone(group, path, dateObj);
-        freqEl.textContent = `✓ ${FREQ_LABEL[freq]} — сделано`;
+        freqEl.textContent = `✓ ${freqAnchorLabel(freq, dateObj)} — сделано`;
         freqEl.style.background = "var(--ok-bg)"; freqEl.style.color = "var(--ok)";
       }
       updateProgress(); renderTabs(); queueSave();
