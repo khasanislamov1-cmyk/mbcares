@@ -156,9 +156,12 @@
       <h1 id="topTitle">MBCares</h1>
       <div class="sub" id="topSub"></div>
     </div>
-    <div class="topbtns">
-      <button class="iconbtn" id="switchBtn" title="Сменить объект">⇄</button>
-      <button class="iconbtn" id="logoutBtn" title="Выйти">⏻</button>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div id="liveClock" style="font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; color:#fff; background:rgba(255,255,255,.12); padding:6px 10px; border-radius:9px;">--:--</div>
+      <div class="topbtns">
+        <button class="iconbtn" id="switchBtn" title="Сменить объект">⇄</button>
+        <button class="iconbtn" id="logoutBtn" title="Выйти">⏻</button>
+      </div>
     </div>
   </div>
 
@@ -191,14 +194,15 @@
       <span>Вы вошли как <b id="whoName">—</b></span>
       <span id="whoRole">—</span>
     </div>
-    <div class="subhead" id="sectionSubhead" style="display:none;">Раздел</div>
-    <div class="obj-list" id="sectionList" style="display:none; margin-bottom:6px;"></div>
     <div class="subhead">Объект (ЖК)</div>
     <div class="obj-list" id="objList"></div>
+    <div class="subhead" id="sectionSubhead" style="display:none;">Чек-лист</div>
+    <div class="obj-list" id="sectionList" style="display:none; margin-bottom:6px;"></div>
   </div>
 
   <!-- CALENDAR -->
   <div class="view" id="view-calendar">
+    <div class="tabs" id="calModeTabs" style="display:none;"></div>
     <div class="cal-head">
       <button class="iconbtn" style="background:#fff;border:1px solid var(--line);color:var(--navy);" id="prevMonth">‹</button>
       <div class="month" id="monthLabel">—</div>
@@ -211,6 +215,18 @@
       <span><i style="background:var(--ok)"></i>Готово</span>
       <span><i style="background:var(--bad)"></i>Есть нарушения</span>
     </div>
+  </div>
+
+  <!-- SUMMARY (manager only) -->
+  <div class="view" id="view-summary">
+    <div class="tabs" id="summaryModeTabs"></div>
+    <div class="tabs" id="periodTabs" style="margin-bottom:14px;">
+      <div class="tab active" data-period="7" id="periodWeek">Неделя</div>
+      <div class="tab" data-period="30" id="periodMonth">Месяц</div>
+    </div>
+    <div id="summaryStats" class="section" style="padding:16px; margin-bottom:14px;"></div>
+    <div class="subhead">Нарушения (❌)</div>
+    <div id="summaryViolations"></div>
   </div>
 
   <!-- DAY -->
@@ -228,6 +244,10 @@
     <div class="progress-wrap">
       <div class="progress-bar"><div id="progressFill" style="width:0%"></div></div>
       <div class="progress-label" id="progressLabel">0 / 0 отмечено</div>
+    </div>
+
+    <div id="lockBanner" style="display:none; background:#F2F2F2; color:var(--muted); border-radius:10px; padding:10px 14px; font-size:12.5px; margin-bottom:14px;">
+      🔒 Этот день закрыт для правок (прошёл полночь). Изменить может только менеджер.
     </div>
 
     <div class="time-field" id="timeFieldWrap" style="display:none;">
@@ -454,10 +474,14 @@ const DOW_RU = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 
 function pad2(n){return n<10?"0"+n:""+n;}
 function dateKey(y,m,d){return `${y}-${pad2(m+1)}-${pad2(d)}`;}
+function todayKey(){ const d=new Date(); return dateKey(d.getFullYear(), d.getMonth(), d.getDate()); }
 function objName(id){const o=OBJECTS.find(o=>o.id===id); return o?o.name:"—";}
 function isManager(){ return state.role === "manager"; }
 function effectiveRole(){ return isManager() ? (state.viewRole || "cleaning") : state.role; }
 function currentRole(){ return ROLES[effectiveRole()]; }
+/* Staff can only edit today's entry; once the date has passed (local midnight),
+   it's locked and read-only for them. Managers can always edit (to fix mistakes). */
+function isEditable(){ return isManager() || state.selectedDate === todayKey(); }
 /* Cache and calendar status must be scoped per role+object, not just per date —
    otherwise switching role/object on the same date reuses another role's data
    shape and crashes when writing. */
@@ -529,10 +553,10 @@ function goObjectSelect(){
   document.getElementById("switchBtn").style.display = "flex";
   document.getElementById("topSub").textContent = state.name;
   document.getElementById("whoName").textContent = state.name;
-  document.getElementById("whoRole").textContent = isManager() ? "Только просмотр" : currentRole().label;
-  document.getElementById("sectionSubhead").style.display = isManager() ? "block" : "none";
-  document.getElementById("sectionList").style.display = isManager() ? "flex" : "none";
-  if(isManager()) renderSectionList();
+  document.getElementById("whoRole").textContent = isManager() ? "Менеджер (просмотр и правки)" : currentRole().label;
+  // require the object → checklist chain to be reconfirmed each time this screen opens
+  document.getElementById("sectionSubhead").style.display = "none";
+  document.getElementById("sectionList").style.display = "none";
   renderObjectList();
   showView("view-object");
 }
@@ -544,7 +568,7 @@ function renderSectionList(){
     el.className = "obj-item";
     el.innerHTML = `<span>${r.label}</span><span>${state.viewRole===r.id?"✓":"›"}</span>`;
     if(state.viewRole===r.id) el.style.outline = "2px solid var(--accent)";
-    el.onclick = ()=>{ state.viewRole = r.id; applyAccent(); renderSectionList(); };
+    el.onclick = ()=>{ state.viewRole = r.id; applyAccent(); goCalendar(); };
     wrap.appendChild(el);
   });
 }
@@ -554,8 +578,19 @@ function renderObjectList(){
   OBJECTS.forEach(o=>{
     const el = document.createElement("div");
     el.className = "obj-item";
-    el.innerHTML = `<span>${o.name}</span><span>›</span>`;
-    el.onclick = ()=>{ state.objectId = o.id; goCalendar(); };
+    el.innerHTML = `<span>${o.name}</span><span>${state.objectId===o.id?"✓":"›"}</span>`;
+    if(state.objectId===o.id) el.style.outline = "2px solid var(--accent)";
+    el.onclick = ()=>{
+      state.objectId = o.id;
+      if(isManager()){
+        renderObjectList();
+        document.getElementById("sectionSubhead").style.display = "block";
+        document.getElementById("sectionList").style.display = "flex";
+        renderSectionList();
+      } else {
+        goCalendar();
+      }
+    };
     wrap.appendChild(el);
   });
 }
@@ -567,6 +602,7 @@ document.getElementById("switchBtn").onclick = ()=>{
 function goCalendar(){
   const sectionLabel = isManager() ? " · " + currentRole().label : "";
   document.getElementById("topSub").textContent = objName(state.objectId) + sectionLabel + " · " + state.name;
+  renderModeTabs();
   renderCalendar();
   showView("view-calendar");
 }
@@ -574,6 +610,27 @@ function goDay(key){
   state.selectedDate = key;
   state.activeTab = currentRole().tabs[0].id;
   loadDay(key).then(()=>{ renderDay(); showView("view-day"); });
+}
+
+/* Manager-only Календарь/Сводка switch, shown atop both screens */
+function renderModeTabs(){
+  const calWrap = document.getElementById("calModeTabs");
+  const sumWrap = document.getElementById("summaryModeTabs");
+  if(!isManager()){
+    calWrap.style.display = "none";
+    return;
+  }
+  calWrap.style.display = "flex";
+  const tabsHtml = (mode)=>`
+    <div class="tab${mode==='cal'?' active':''}" id="modeTabCal">Календарь</div>
+    <div class="tab${mode==='sum'?' active':''}" id="modeTabSum">Сводка</div>
+  `;
+  calWrap.innerHTML = tabsHtml("cal");
+  sumWrap.innerHTML = tabsHtml("sum");
+  [calWrap, sumWrap].forEach(wrap=>{
+    wrap.querySelector("#modeTabCal").onclick = goCalendar;
+    wrap.querySelector("#modeTabSum").onclick = goSummary;
+  });
 }
 
 /* ============================================================
@@ -654,6 +711,147 @@ document.getElementById("backBtn").onclick = goCalendar;
 document.getElementById("doneBtn").onclick = goCalendar;
 
 /* ============================================================
+   SUMMARY (manager only) — weekly / monthly rollup + violations list
+   ============================================================ */
+let summaryPeriod = 7;
+
+function resolveItemText(effRole, group, path){
+  if(effRole === "cleaning"){
+    if(group === "main"){
+      const m = path.match(/^s(\d+)_(\d+)$/);
+      if(m){
+        const sec = MAIN_SECTIONS[+m[1]];
+        if(sec) return {section: sec.title, text: sec.items[+m[2]]};
+      }
+    } else if(group === "express"){
+      if(path === "forma") return {section:"Форма уборщицы", text:"Форма заполнена и подписана?"};
+      const m = path.match(/^(male|female)_(\d+)$/);
+      if(m) return {section: m[1]==="male"?"Мужская уборная":"Женская уборная", text: EXPRESS_POINTS[+m[2]]};
+    }
+  } else {
+    const m = path.match(/^z(\d+)_(\d+)$/);
+    if(m){
+      const zone = ZONES[+m[1]];
+      if(zone) return {section: zone.title, text: zone.items[+m[2]]};
+    }
+  }
+  return {section:"", text: path};
+}
+
+function goSummary(){
+  document.getElementById("topSub").textContent =
+    objName(state.objectId) + " · " + currentRole().label + " · Сводка";
+  renderModeTabs();
+  document.querySelectorAll("#periodTabs .tab").forEach(t=>{
+    t.classList.toggle("active", +t.dataset.period === summaryPeriod);
+  });
+  document.getElementById("periodWeek").onclick = ()=>{ summaryPeriod=7; loadAndRenderSummary(); };
+  document.getElementById("periodMonth").onclick = ()=>{ summaryPeriod=30; loadAndRenderSummary(); };
+  showView("view-summary");
+  loadAndRenderSummary();
+}
+
+function loadAndRenderSummary(){
+  document.querySelectorAll("#periodTabs .tab").forEach(t=>{
+    t.classList.toggle("active", +t.dataset.period === summaryPeriod);
+  });
+  const statsEl = document.getElementById("summaryStats");
+  const violEl = document.getElementById("summaryViolations");
+  statsEl.innerHTML = `<div style="color:var(--muted); font-size:13px;">Загрузка…</div>`;
+  violEl.innerHTML = "";
+
+  const effRole = effectiveRole();
+  const dbRoot = currentRole().dbRoot;
+  const objectId = state.objectId;
+  const dates = [];
+  const base = new Date();
+  for(let i=0;i<summaryPeriod;i++){
+    const d = new Date(base); d.setDate(d.getDate()-i);
+    dates.push(dateKey(d.getFullYear(), d.getMonth(), d.getDate()));
+  }
+
+  Promise.all(dates.map(dk =>
+    db.ref(`${dbRoot}/${objectId}/${dk}`).once("value").then(snap=>({date:dk, data:snap.val()}))
+  )).then(results=>{
+    let ok=0, warn=0, bad=0;
+    const violations = [];
+    results.forEach(({date, data})=>{
+      if(!data) return;
+      Object.entries(data).forEach(([group, groupData])=>{
+        if(!groupData || typeof groupData !== "object") return;
+        Object.entries(groupData).forEach(([path, v])=>{
+          if(path === "_meta") return;
+          if(!v || typeof v !== "object" || !v.status) return;
+          if(v.status === "✅") ok++;
+          else if(v.status === "⚠") warn++;
+          else if(v.status === "❌"){
+            bad++;
+            const info = resolveItemText(effRole, group, path);
+            violations.push({
+              date, group, text: info.text, section: info.section,
+              comment: v.comment || "", by: v.by || "", ts: v.ts || 0,
+              roundLabel: currentRole().hasTimeField ? tabLabel(group) : ""
+            });
+          } else if(v.status === "Нет"){
+            bad++;
+            const info = resolveItemText(effRole, group, path);
+            violations.push({
+              date, group, text: info.text, section: info.section,
+              comment: "", by: v.by || "", ts: v.ts || 0,
+              roundLabel: currentRole().hasTimeField ? tabLabel(group) : ""
+            });
+          }
+        });
+      });
+    });
+
+    const periodLabel = summaryPeriod===7 ? "за 7 дней" : "за 30 дней";
+    statsEl.innerHTML = `
+      <div style="font-size:13px; color:var(--muted); margin-bottom:10px;">
+        ${objName(state.objectId)} · ${currentRole().label} · ${periodLabel}
+      </div>
+      <div style="display:flex; gap:10px;">
+        <div style="flex:1; text-align:center;">
+          <div style="font-size:22px; font-weight:700; color:var(--ok);">${ok}</div>
+          <div style="font-size:12px; color:var(--muted);">✅ выполнено</div>
+        </div>
+        <div style="flex:1; text-align:center;">
+          <div style="font-size:22px; font-weight:700; color:var(--warn);">${warn}</div>
+          <div style="font-size:12px; color:var(--muted);">⚠ замечания</div>
+        </div>
+        <div style="flex:1; text-align:center;">
+          <div style="font-size:22px; font-weight:700; color:var(--bad);">${bad}</div>
+          <div style="font-size:12px; color:var(--muted);">❌ нарушения</div>
+        </div>
+      </div>
+    `;
+
+    violations.sort((a,b)=> b.ts - a.ts || (a.date < b.date ? 1 : -1));
+    if(violations.length === 0){
+      violEl.innerHTML = `<div style="color:var(--muted); font-size:13px; padding:8px 2px;">Нарушений за этот период нет.</div>`;
+    } else {
+      violEl.innerHTML = "";
+      violations.forEach(v=>{
+        const row = document.createElement("div");
+        row.className = "item";
+        row.style.background = "#fff"; row.style.border = "1px solid var(--line)"; row.style.borderRadius = "12px"; row.style.marginBottom = "8px";
+        const dateHuman = fmtDateHuman(v.date);
+        const roundPart = v.roundLabel ? ` · обход ${v.roundLabel}` : "";
+        row.innerHTML = `
+          <div style="font-size:11.5px; color:var(--muted); margin-bottom:4px;">${dateHuman}${roundPart}${v.by ? " · "+v.by : ""}</div>
+          ${v.section ? `<div style="font-size:11px; color:var(--bad); font-weight:600; margin-bottom:2px;">${v.section}</div>` : ""}
+          <div class="item-text" style="margin-bottom:${v.comment?"6px":"0"};">${v.text}</div>
+          ${v.comment ? `<div class="comment show" style="background:#F5F7FA; color:var(--text);">${v.comment}</div>` : ""}
+        `;
+        violEl.appendChild(row);
+      });
+    }
+  }).catch(err=>{
+    statsEl.innerHTML = `<div style="color:var(--bad); font-size:13px;">Не удалось загрузить сводку: ${err.message}</div>`;
+  });
+}
+
+/* ============================================================
    DAY
    ============================================================ */
 function loadDay(key){
@@ -703,6 +901,7 @@ function renderDay(){
   document.getElementById("dayTitle").textContent =
     (roleObj.id==="security" ? "Ночной обход · " : "") + fmtDateHuman(key);
   document.getElementById("dayObj").textContent = objName(state.objectId) + " · " + state.name;
+  document.getElementById("lockBanner").style.display = isEditable() ? "none" : "block";
   document.getElementById("timeFieldWrap").style.display = roleObj.hasTimeField ? "flex" : "none";
   renderTabs();
   renderDayPanel();
@@ -729,7 +928,7 @@ function itemRow(group, path, text, opts){
   opts = opts || {};
   const data = getVal(group, path) || {};
 
-  if(isManager()){
+  if(!isEditable()){
     const row = document.createElement("div");
     row.className = "item";
     const badgeMap = {
@@ -813,8 +1012,8 @@ function renderDayPanel(){
     const timeInput = document.getElementById("actualTime");
     const meta = getVal(state.activeTab, "_meta") || {};
     timeInput.value = meta.actualTime || "";
-    timeInput.disabled = isManager();
-    timeInput.oninput = isManager() ? null : ()=>{
+    timeInput.disabled = !isEditable();
+    timeInput.oninput = !isEditable() ? null : ()=>{
       setVal(state.activeTab, "_meta", {actualTime:timeInput.value, by:state.name, ts:Date.now()});
       queueSave();
     };
@@ -882,7 +1081,7 @@ function queueSave(){
   saveTimer = setTimeout(doSave, 600);
 }
 function doSave(){
-  if(isManager()) return; // read-only account — never writes
+  if(!isEditable()) return; // locked day for staff — never writes
   const key = state.selectedDate;
   const data = state.cache[scopeKey(key)];
   db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}`).set(data).then(()=>{
@@ -895,6 +1094,16 @@ function flashSaved(){
   el.classList.add("show");
   setTimeout(()=>el.classList.remove("show"), 1200);
 }
+
+/* ============================================================
+   LIVE CLOCK — always visible in the top bar while signed in
+   ============================================================ */
+function updateClock(){
+  const d = new Date();
+  document.getElementById("liveClock").textContent = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+updateClock();
+setInterval(updateClock, 1000);
 
 /* ============================================================
    PWA install
