@@ -312,6 +312,11 @@ const ROLES = {
       {id:"r0400", label:"04:00"}, {id:"r0600", label:"06:00"},
     ],
     hasTimeField:true
+  },
+  technician: {
+    id:"technician", label:"Техник", dbRoot:"tech", accent:"#2E8B77",
+    tabs:[{id:"tasks", label:"Задачи смены"}],
+    hasTimeField:false
   }
 };
 
@@ -322,6 +327,28 @@ const OBJECTS = [
   {id:"dostlar", name:"Дустлар"},
   {id:"nest-one", name:"Nest One"},
   {id:"kislorod", name:"Кислород"},
+];
+
+/* ============================================================
+   TECHNICIAN DATA — по графику мероприятий в смене (дежурный техник)
+   ============================================================ */
+const TECH_TASKS = [
+  {time:"7:00–7:10", text:"Контроль за выключением внешнего освещения двора и фасадной подсветки"},
+  {time:"9:00–9:30", text:"Обход-осмотр здания: крыша (солнечный коллектор, солнечные панели), вентиляционные решётки, тех. помещения подвала (насосная ХВС, насосный пожарный пост, ВРУ секции, телеком.-комната) — Секция №1"},
+  {time:"9:30–10:00", text:"Обход-осмотр здания (см. выше) — Секция №2"},
+  {time:"10:00–10:30", text:"Обход-осмотр здания (см. выше) — Секция №3"},
+  {time:"10:00–10:30", text:"Обход-осмотр ГРЩ 0.4 (главные распределительные щиты), генератора"},
+  {time:"10:30–10:45", text:"Контроль за работой насосов ХВС — давление и утечка воды"},
+  {time:"10:30–11:00", text:"Обход-осмотр здания (см. выше) — Секция №4"},
+  {time:"11:00–11:30", text:"Обход-осмотр дренажных приямков — уровень жидкости, работоспособность дренажных насосов"},
+  {time:"11:00–11:30", text:"Обход-осмотр дренажных приямков на паркинге"},
+  {time:"11:30–17:00", text:"Работа по заявкам, текущее обслуживание инженерных систем"},
+  {time:"17:00–18:30", text:"Контроль за работой насосов ХВС — давление и утечка воды"},
+  {time:"18:30–18:40", text:"Контроль за включением внешнего освещения двора и фасадной подсветки"},
+  {time:"2 раза/сутки · 20 мин (отопительный период)", text:"Обход котельной и теплового узла — контроль давления и температуры воды"},
+  {time:"21:00–21:45", text:"Обход-осмотр здания, санузлов, МОП"},
+  {time:"22:00–22:15", text:"Контроль за работой насосов ХВС — давление и утечка воды"},
+  {time:"23:00–23:15", text:"Обход-осмотр здания, санузлов, МОП, 1 этаж"},
 ];
 
 /* ============================================================
@@ -793,6 +820,12 @@ function resolveItemText(effRole, group, path){
       const m = path.match(/^(male|female)_(\d+)$/);
       if(m) return {section: m[1]==="male"?"Мужская уборная":"Женская уборная", text: EXPRESS_POINTS[+m[2]]};
     }
+  } else if(effRole === "technician"){
+    const m = path.match(/^t(\d+)$/);
+    if(m){
+      const task = TECH_TASKS[+m[1]];
+      if(task) return {section: task.time, text: task.text};
+    }
   } else {
     const m = path.match(/^z(\d+)_(\d+)$/);
     if(m){
@@ -980,6 +1013,11 @@ function renderDay(){
 function renderTabs(){
   const wrap = document.getElementById("tabsRow");
   wrap.innerHTML = "";
+  if(currentRole().tabs.length <= 1){
+    wrap.style.display = "none";
+    return;
+  }
+  wrap.style.display = "flex";
   currentRole().tabs.forEach(t=>{
     const el = document.createElement("div");
     el.className = "tab" + (state.activeTab===t.id ? " active":"");
@@ -997,6 +1035,9 @@ function renderTabs(){
 function itemRow(group, path, text, opts){
   opts = opts || {};
   const data = getVal(group, path) || {};
+  const timeHtml = opts.timeLabel
+    ? `<div style="font-size:11px; font-weight:700; color:var(--accent); margin-bottom:3px;">🕐 ${opts.timeLabel}</div>`
+    : "";
 
   if(!isEditable()){
     const row = document.createElement("div");
@@ -1010,6 +1051,7 @@ function itemRow(group, path, text, opts){
       ? `<span class="seg" style="max-width:120px;"><button class="${b.cls}" style="pointer-events:none;">${b.label}</button></span>`
       : `<span style="color:var(--muted); font-size:13px;">— не отмечено</span>`;
     row.innerHTML = `
+      ${timeHtml}
       <div class="item-text">${text}</div>
       ${badgeHtml}
       ${data.comment ? `<div class="comment show" style="background:#F5F7FA; color:var(--text);">${data.comment}</div>` : ""}
@@ -1021,6 +1063,7 @@ function itemRow(group, path, text, opts){
   row.className = "item";
   if(opts.binary){
     row.innerHTML = `
+      ${timeHtml}
       <div class="item-text">${text}</div>
       <div class="seg">
         <button data-v="Да" class="${data.status==='Да'?'sel-ok':''}">Да</button>
@@ -1041,6 +1084,7 @@ function itemRow(group, path, text, opts){
     return row;
   }
   row.innerHTML = `
+    ${timeHtml}
     <div class="item-text">${text}</div>
     <div class="seg">
       <button data-v="✅" class="${data.status==='✅'?'sel-ok':''}">✅</button>
@@ -1117,6 +1161,16 @@ function renderDayPanel(){
       secEl.appendChild(itemRow("express", "forma", "Форма заполнена и подписана?", {binary:true}));
       panel.appendChild(secEl);
     }
+  } else if(roleObj.id === "technician"){
+    const secEl = document.createElement("div");
+    secEl.className = "section";
+    const head = document.createElement("div");
+    head.className = "section-head"; head.textContent = "График мероприятий в смене";
+    secEl.appendChild(head);
+    TECH_TASKS.forEach((task, ti)=>{
+      secEl.appendChild(itemRow("tasks", `t${ti}`, task.text, {timeLabel: task.time}));
+    });
+    panel.appendChild(secEl);
   } else {
     ZONES.forEach((zone, zi)=>{
       const secEl = document.createElement("div");
