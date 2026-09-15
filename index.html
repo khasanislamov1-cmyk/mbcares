@@ -957,8 +957,9 @@ function freqAnchorLabel(freq, dateObj){
     return `2 раза в неделю (с ${anchor.getDate()} числа)`;
   }
   if(freq === "biweekly"){
-    const anchorDay = dateObj.getDate() <= 15 ? 1 : 16;
-    return `Раз в 15 дней (с ${anchorDay} числа)`;
+    const lastDay = new Date(dateObj.getFullYear(), dateObj.getMonth()+1, 0).getDate();
+    const anchorDay = dateObj.getDate() <= 15 ? 15 : lastDay;
+    return `Раз в 15 дней (до ${anchorDay} числа)`;
   }
   if(freq === "monthly") return `Раз в месяц (с 1 числа)`;
   return "";
