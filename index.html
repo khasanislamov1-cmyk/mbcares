@@ -617,6 +617,13 @@ const MAIN_SECTIONS = [
     "Журнал забытых/утерянных вещей (форма 01-005 УБ) — ведётся корректно",
   ]},
 ];
+/* Periodicity per MAIN_SECTIONS index — drives which non-daily items get
+   a due/overdue badge and which calendar days get a reminder marker.
+   Matches "01-001 УБ Форма плановых уборок": ежедневно / раз в неделю
+   (по понедельникам) / раз в 15 дней (1 и 16 числа). */
+const SECTION_FREQ = ["daily","weekly","biweekly","daily","weekly","daily","daily"];
+const FREQ_LABEL = {weekly:"Раз в неделю (пн)", biweekly:"Раз в 15 дней (1 и 16)"};
+
 const EXPRESS_POINTS = [
   "Пол — чистый, сухой, без мусора",
   "Раковины — без налёта, смесители работают",
@@ -703,6 +710,29 @@ const DOW_RU = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
 function pad2(n){return n<10?"0"+n:""+n;}
 function dateKey(y,m,d){return `${y}-${pad2(m+1)}-${pad2(d)}`;}
 function todayKey(){ const d=new Date(); return dateKey(d.getFullYear(), d.getMonth(), d.getDate()); }
+function parseDateKey(key){ const [y,m,d] = key.split("-").map(Number); return new Date(y, m-1, d); }
+function mondayKeyOf(dateObj){
+  const dow = (dateObj.getDay()+6)%7; // Mon=0..Sun=6
+  const monday = new Date(dateObj);
+  monday.setDate(dateObj.getDate()-dow);
+  return dateKey(monday.getFullYear(), monday.getMonth(), monday.getDate());
+}
+function cycleKeyForFreq(freq, dateObj){
+  if(freq === "weekly") return "w:" + mondayKeyOf(dateObj);
+  if(freq === "biweekly"){
+    const half = dateObj.getDate() <= 15 ? "a" : "b";
+    return "b:" + dateObj.getFullYear() + "-" + pad2(dateObj.getMonth()+1) + "-" + half;
+  }
+  return null;
+}
+function itemFreq(group, path){
+  if(group !== "main") return null;
+  const m = path.match(/^s(\d+)_(\d+)$/);
+  if(!m) return null;
+  const freq = SECTION_FREQ[+m[1]];
+  return freq === "daily" ? null : freq;
+}
+
 function objName(id){const o=OBJECTS.find(o=>o.id===id); return o?o.name:"—";}
 function isManager(){ return state.role === "manager"; }
 function effectiveRole(){ return isManager() ? (state.viewRole || "cleaning") : state.role; }
@@ -841,6 +871,57 @@ document.getElementById("sectionBackBtn").onclick = ()=>{
 document.getElementById("residentsBackBtn").onclick = ()=>{
   goSectionSelect();
 };
+
+/* ============================================================
+   CLEANING CYCLES — план плановых уборок (01-001 УБ): раз в
+   неделю / раз в 15 дней. Отдельный узел, не привязан к одной
+   дате, чтобы можно было понять "уже сделано в этом цикле?" без
+   перебора всех дней подряд.
+   ============================================================ */
+let cyclesCache = {}; // {"main.s1_2": {"w:2026-09-14": true}, ...}
+let cyclesLoadedFor = null; // objectId для которого cyclesCache актуален
+
+function loadCyclesIfNeeded(){
+  if(effectiveRole() !== "cleaning") return Promise.resolve();
+  if(cyclesLoadedFor === state.objectId) return Promise.resolve();
+  return db.ref(`checklists/${state.objectId}/_cycles`).once("value").then(snap=>{
+    cyclesCache = snap.val() || {};
+    cyclesLoadedFor = state.objectId;
+  }).catch(()=>{ cyclesCache = {}; });
+}
+
+function isCycleDone(group, path, dateObj){
+  const freq = itemFreq(group, path);
+  if(!freq) return true; // daily items have no cycle concept — never "overdue"
+  const key = cycleKeyForFreq(freq, dateObj);
+  const id = `${group}.${path}`;
+  return !!(cyclesCache[id] && cyclesCache[id][key]);
+}
+function markCycleDone(group, path, dateObj){
+  const freq = itemFreq(group, path);
+  if(!freq) return;
+  const key = cycleKeyForFreq(freq, dateObj);
+  const id = `${group}.${path}`;
+  if(!cyclesCache[id]) cyclesCache[id] = {};
+  cyclesCache[id][key] = true;
+  db.ref(`checklists/${state.objectId}/_cycles/${id}/${key}`).set(true).catch(()=>{});
+}
+function sectionItemPaths(si){
+  return MAIN_SECTIONS[si].items.map((_, ii)=> `s${si}_${ii}`);
+}
+function isWeekAllDone(mondayDateStr){
+  const dateObj = parseDateKey(mondayDateStr);
+  return SECTION_FREQ.reduce((ok, freq, si)=>{
+    if(freq !== "weekly") return ok;
+    return ok && sectionItemPaths(si).every(p => isCycleDone("main", p, dateObj));
+  }, true);
+}
+function isHalfMonthAllDone(dateObj){
+  return SECTION_FREQ.reduce((ok, freq, si)=>{
+    if(freq !== "biweekly") return ok;
+    return ok && sectionItemPaths(si).every(p => isCycleDone("main", p, dateObj));
+  }, true);
+}
 
 /* ============================================================
    RESIDENTS — шахматка домов (не привязана к датам, живое состояние)
@@ -1057,13 +1138,14 @@ function goCalendar(){
   const sectionLabel = isManager() ? " · " + currentRole().label : "";
   document.getElementById("topSub").textContent = objName(state.objectId) + sectionLabel + " · " + state.name;
   renderModeTabs();
+  loadCyclesIfNeeded().then(renderCalendar);
   renderCalendar();
   showView("view-calendar");
 }
 function goDay(key){
   state.selectedDate = key;
   state.activeTab = currentRole().tabs[0].id;
-  loadDay(key).then(()=>{
+  Promise.all([loadDay(key), loadCyclesIfNeeded()]).then(()=>{
     // Record when the employee first opened today's checklist (for manager oversight).
     // Never touch this on past/locked days or when a manager is just browsing.
     if(!isManager() && key === todayKey()){
@@ -1130,11 +1212,33 @@ function renderCalendar(){
     const key = dateKey(y,m,d);
     const el = document.createElement("div");
     el.className = "cal-day st-none" + (key===todayKey?" today":"");
+    el.style.position = "relative";
     el.innerHTML = `<div>${d}</div><div class="dot"></div>`;
     el.onclick = ()=>goDay(key);
     grid.appendChild(el);
     applyDayStatus(key, el);
     fetchDayStatus(key, el);
+    if(effectiveRole() === "cleaning"){
+      const dateObj = new Date(y, m, d);
+      const dow = dateObj.getDay();
+      let corner = null;
+      if(dow === 1){ // Monday — weekly anchor
+        corner = isWeekAllDone(mondayKeyOf(dateObj)) ? "#2E7D46" : "#C00000";
+      } else if(d === 1 || d === 16){ // biweekly anchor
+        corner = isHalfMonthAllDone(dateObj) ? "#2E7D46" : "#C00000";
+      }
+      if(corner){
+        const marker = document.createElement("div");
+        marker.style.position = "absolute";
+        marker.style.top = "-4px"; marker.style.right = "-4px";
+        marker.style.width = "10px"; marker.style.height = "10px";
+        marker.style.borderRadius = "50%";
+        marker.style.background = corner;
+        marker.style.border = "2px solid #fff";
+        marker.title = dow===1 ? "Еженедельная уборка" : "Уборка раз в 15 дней";
+        el.appendChild(marker);
+      }
+    }
   }
 }
 
@@ -1482,6 +1586,14 @@ function itemRow(group, path, text, opts){
   const metaText = (d)=> d && d.status ? `${fmtTime(d.ts)}${d.by ? " · "+d.by : ""}` : "";
   const metaHtml = `<div class="item-meta" style="font-size:10.5px; color:var(--muted); margin-top:5px;">${metaText(data)}</div>`;
 
+  const freq = itemFreq(group, path);
+  let freqHtml = "";
+  if(freq){
+    const dateObj = parseDateKey(state.selectedDate);
+    const done = isCycleDone(group, path, dateObj);
+    freqHtml = `<div class="freq-badge" style="display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:8px; margin-bottom:7px; background:${done?'var(--ok-bg)':'var(--bad-bg)'}; color:${done?'var(--ok)':'var(--bad)'};">${done?'✓ ':'⏰ '}${FREQ_LABEL[freq]}${done?' — сделано':' — нужно в этом цикле'}</div>`;
+  }
+
   if(!isEditable()){
     const row = document.createElement("div");
     row.className = "item";
@@ -1508,6 +1620,7 @@ function itemRow(group, path, text, opts){
       : `<span style="color:var(--muted); font-size:13px;">— не отмечено</span>`;
     row.innerHTML = `
       ${timeHtml}
+      ${freqHtml}
       <div class="item-text">${text}</div>
       ${badgeHtml}
       ${metaHtml}
@@ -1582,6 +1695,7 @@ function itemRow(group, path, text, opts){
   }
   row.innerHTML = `
     ${timeHtml}
+    ${freqHtml}
     <div class="item-text">${text}</div>
     <div class="seg">
       <button data-v="✅" class="${data.status==='✅'?'sel-ok':''}">✅</button>
@@ -1594,6 +1708,7 @@ function itemRow(group, path, text, opts){
   const seg = row.querySelector(".seg");
   const textarea = row.querySelector(".comment");
   const metaEl = row.querySelector(".item-meta");
+  const freqEl = row.querySelector(".freq-badge");
   seg.querySelectorAll("button").forEach(btn=>{
     btn.onclick = ()=>{
       const v = btn.dataset.v;
@@ -1607,6 +1722,12 @@ function itemRow(group, path, text, opts){
       if(newStatus==="❌") btn.classList.add("sel-bad");
       textarea.classList.toggle("show", newStatus==="⚠"||newStatus==="❌");
       metaEl.textContent = metaText(rec);
+      if(freq && newStatus){
+        const dateObj = parseDateKey(state.selectedDate);
+        markCycleDone(group, path, dateObj);
+        freqEl.textContent = `✓ ${FREQ_LABEL[freq]} — сделано`;
+        freqEl.style.background = "var(--ok-bg)"; freqEl.style.color = "var(--ok)";
+      }
       updateProgress(); renderTabs(); queueSave();
     };
   });
