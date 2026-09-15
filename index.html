@@ -236,6 +236,7 @@
       <div class="tab" data-period="30" id="periodMonth">Месяц</div>
     </div>
     <div id="summaryStats" class="section" style="padding:16px; margin-bottom:14px;"></div>
+    <button class="primary-btn" id="exportCsvBtn" style="margin-bottom:18px;">📥 Скачать таблицу (Excel/CSV)</button>
     <div class="subhead">Нарушения (❌)</div>
     <div id="summaryViolations"></div>
   </div>
@@ -620,7 +621,25 @@ function goCalendar(){
 function goDay(key){
   state.selectedDate = key;
   state.activeTab = currentRole().tabs[0].id;
-  loadDay(key).then(()=>{ renderDay(); showView("view-day"); });
+  loadDay(key).then(()=>{
+    // Record when the employee first opened today's checklist (for manager oversight).
+    // Never touch this on past/locked days or when a manager is just browsing.
+    if(!isManager() && key === todayKey()){
+      const data = state.cache[scopeKey(key)];
+      if(!data._session){
+        data._session = {openedAt: Date.now(), by: state.name};
+        db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}/_session`)
+          .set(data._session).catch(()=>{});
+      }
+    }
+    renderDay();
+    showView("view-day");
+  });
+}
+function fmtTime(ts){
+  if(!ts) return "";
+  const d = new Date(ts);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
 /* Manager-only Календарь/Сводка switch, shown atop both screens */
@@ -725,6 +744,41 @@ document.getElementById("doneBtn").onclick = goCalendar;
    SUMMARY (manager only) — weekly / monthly rollup + violations list
    ============================================================ */
 let summaryPeriod = 7;
+let lastSummaryExportRows = [];
+
+function csvEscape(v){
+  const s = String(v==null?"":v);
+  return /[",\n;]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+function exportSummaryCsv(){
+  if(!lastSummaryExportRows.length){
+    alert("Нет данных для экспорта за этот период.");
+    return;
+  }
+  const hasRounds = currentRole().hasTimeField;
+  const headers = ["Дата", ...(hasRounds?["Обход"]:[]), "Раздел", "Пункт", "Статус", "Комментарий", "Отметил", "Время"];
+  const lines = [headers.map(csvEscape).join(";")];
+  lastSummaryExportRows
+    .slice()
+    .sort((a,b)=> a.date < b.date ? 1 : (a.date > b.date ? -1 : 0))
+    .forEach(r=>{
+      const row = [fmtDateHuman(r.date), ...(hasRounds?[r.roundLabel]:[]), r.section, r.text, r.status, r.comment, r.by, r.time];
+      lines.push(row.map(csvEscape).join(";"));
+    });
+  const csv = "\uFEFF" + lines.join("\r\n"); // BOM so Excel opens Cyrillic correctly
+  const blob = new Blob([csv], {type:"text/csv;charset=utf-8;"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const periodLabel = summaryPeriod===7 ? "nedelya" : "mesyats";
+  a.href = url;
+  a.download = `MBCares_${state.objectId}_${currentRole().dbRoot}_${periodLabel}_${todayKey()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+document.getElementById("exportCsvBtn").onclick = exportSummaryCsv;
+
 
 function resolveItemText(effRole, group, path){
   if(effRole === "cleaning"){
@@ -770,6 +824,7 @@ function loadAndRenderSummary(){
   const violEl = document.getElementById("summaryViolations");
   statsEl.innerHTML = `<div style="color:var(--muted); font-size:13px;">Загрузка…</div>`;
   violEl.innerHTML = "";
+  lastSummaryExportRows = [];
 
   const effRole = effectiveRole();
   const dbRoot = currentRole().dbRoot;
@@ -786,35 +841,34 @@ function loadAndRenderSummary(){
   )).then(results=>{
     let ok=0, warn=0, bad=0;
     const violations = [];
+    const exportRows = []; // every marked item, for the CSV/Excel export
     results.forEach(({date, data})=>{
       if(!data) return;
       Object.entries(data).forEach(([group, groupData])=>{
+        if(group === "_session") return;
         if(!groupData || typeof groupData !== "object") return;
         Object.entries(groupData).forEach(([path, v])=>{
           if(path === "_meta") return;
           if(!v || typeof v !== "object" || !v.status) return;
+          const info = resolveItemText(effRole, group, path);
+          const roundLabel = currentRole().hasTimeField ? tabLabel(group) : "";
+          exportRows.push({
+            date, roundLabel, section: info.section, text: info.text,
+            status: v.status, comment: v.comment || "", by: v.by || "", time: fmtTime(v.ts)
+          });
           if(v.status === "✅") ok++;
           else if(v.status === "⚠") warn++;
-          else if(v.status === "❌"){
+          else if(v.status === "❌" || v.status === "Нет"){
             bad++;
-            const info = resolveItemText(effRole, group, path);
             violations.push({
               date, group, text: info.text, section: info.section,
-              comment: v.comment || "", by: v.by || "", ts: v.ts || 0,
-              roundLabel: currentRole().hasTimeField ? tabLabel(group) : ""
-            });
-          } else if(v.status === "Нет"){
-            bad++;
-            const info = resolveItemText(effRole, group, path);
-            violations.push({
-              date, group, text: info.text, section: info.section,
-              comment: "", by: v.by || "", ts: v.ts || 0,
-              roundLabel: currentRole().hasTimeField ? tabLabel(group) : ""
+              comment: v.comment || "", by: v.by || "", ts: v.ts || 0, roundLabel
             });
           }
         });
       });
     });
+    lastSummaryExportRows = exportRows;
 
     const periodLabel = summaryPeriod===7 ? "за 7 дней" : "за 30 дней";
     statsEl.innerHTML = `
@@ -911,7 +965,12 @@ function renderDay(){
   const roleObj = currentRole();
   document.getElementById("dayTitle").textContent =
     (roleObj.id==="security" ? "Ночной обход · " : "") + fmtDateHuman(key);
-  document.getElementById("dayObj").textContent = objName(state.objectId) + " · " + state.name;
+  let objLine = objName(state.objectId) + " · " + state.name;
+  if(isManager()){
+    const sess = state.cache[scopeKey(key)]._session;
+    if(sess) objLine += ` · вход в ${fmtTime(sess.openedAt)} (${sess.by})`;
+  }
+  document.getElementById("dayObj").textContent = objLine;
   document.getElementById("lockBanner").style.display = isEditable() ? "none" : "block";
   document.getElementById("timeFieldWrap").style.display = roleObj.hasTimeField ? "flex" : "none";
   renderTabs();
