@@ -81,6 +81,16 @@
   }
   .who-badge b{font-size:14px;}
 
+  .building-card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:14px;}
+  .building-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;}
+  .building-head b{font-size:15px; color:var(--navy);}
+  .building-head span{font-size:12px; color:var(--muted);}
+  .apt-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(40px, 1fr)); gap:6px;}
+  .apt-cell{
+    aspect-ratio:1; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    font-size:11.5px; font-weight:700; border:none; cursor:pointer;
+  }
+
   .cal-head{display:flex; align-items:center; justify-content:space-between; margin:4px 0 14px;}
   .cal-head .month{font-size:17px; font-weight:700; color:var(--navy);}
   .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:6px;}
@@ -209,6 +219,25 @@
     </div>
     <div class="subhead">Чек-лист</div>
     <div class="obj-list" id="sectionList"></div>
+    <div class="subhead">Прочее</div>
+    <div class="obj-list" id="extraList"></div>
+  </div>
+
+  <!-- RESIDENTS (шахматка домов) -->
+  <div class="view" id="view-residents">
+    <div class="day-header">
+      <button class="back-btn" id="residentsBackBtn">←</button>
+      <div>
+        <div class="day-title">Жители</div>
+        <div class="day-obj" id="residentsObjTitle">—</div>
+      </div>
+    </div>
+    <div class="legend" style="margin-bottom:16px;">
+      <span><i style="background:#D5DAE2"></i>Пустует</span>
+      <span><i style="background:#2E7D46"></i>Заселена</span>
+      <span><i style="background:#B98400"></i>Ремонт</span>
+    </div>
+    <div id="residentsPanel"></div>
   </div>
 
   <!-- CALENDAR -->
@@ -441,6 +470,24 @@ const AUDIT_SECTIONS = [
     "Заявки на закупку (01-001 УПР) поданы своевременно",
   ]},
 ];
+
+/* ============================================================
+   RESIDENTS DATA — шахматка домов по объектам (пусто = данных ещё нет)
+   ============================================================ */
+const BUILDINGS_DATA = {
+  "soy-boyi": [
+    {id:"3a", name:"Дом 3A", count:78},
+    {id:"3b", name:"Дом 3B", count:81},
+    {id:"3d", name:"Дом 3D", count:104},
+    {id:"3e", name:"Дом 3E", count:97},
+  ]
+};
+const APT_STATUS_CYCLE = ["empty", "occupied", "renovation"];
+const APT_STATUS_META = {
+  empty:      {label:"Пустует",   color:"#D5DAE2", text:"#5B6472"},
+  occupied:   {label:"Заселена",  color:"#2E7D46", text:"#fff"},
+  renovation: {label:"Ремонт",    color:"#B98400", text:"#fff"},
+};
 
 /* ============================================================
    CLEANING DATA
@@ -692,6 +739,7 @@ function goObjectSelect(){
 function goSectionSelect(){
   document.getElementById("sectionObjTitle").textContent = objName(state.objectId);
   renderSectionList();
+  renderExtraList();
   showView("view-section");
 }
 function renderSectionList(){
@@ -706,6 +754,15 @@ function renderSectionList(){
       el.onclick = ()=>{ state.viewRole = r.id; applyAccent(); goCalendar(); };
       wrap.appendChild(el);
     });
+}
+function renderExtraList(){
+  const wrap = document.getElementById("extraList");
+  wrap.innerHTML = "";
+  const el = document.createElement("div");
+  el.className = "obj-item";
+  el.innerHTML = `<span>🏠 Жители</span><span>›</span>`;
+  el.onclick = goResidents;
+  wrap.appendChild(el);
 }
 function renderObjectList(){
   const wrap = document.getElementById("objList");
@@ -731,7 +788,99 @@ document.getElementById("switchBtn").onclick = ()=>{
 document.getElementById("sectionBackBtn").onclick = ()=>{
   goObjectSelect();
 };
+document.getElementById("residentsBackBtn").onclick = ()=>{
+  goSectionSelect();
+};
 
+/* ============================================================
+   RESIDENTS — шахматка домов (не привязана к датам, живое состояние)
+   ============================================================ */
+let residentsCache = null; // {buildingId: {aptNumber: {status, by, ts}}}
+
+function goResidents(){
+  document.getElementById("residentsObjTitle").textContent = objName(state.objectId);
+  const panel = document.getElementById("residentsPanel");
+  panel.innerHTML = `<div style="color:var(--muted); font-size:13px;">Загрузка…</div>`;
+  showView("view-residents");
+
+  db.ref(`residents/${state.objectId}`).once("value").then(snap=>{
+    residentsCache = snap.val() || {};
+    renderResidentsPanel();
+  }).catch(err=>{
+    panel.innerHTML = `<div style="color:var(--bad); font-size:13px;">Не удалось загрузить: ${err.message}</div>`;
+  });
+}
+
+function renderResidentsPanel(){
+  const panel = document.getElementById("residentsPanel");
+  panel.innerHTML = "";
+  const buildings = BUILDINGS_DATA[state.objectId];
+  if(!buildings){
+    panel.innerHTML = `<div style="color:var(--muted); font-size:13px; padding:10px 2px;">Данные по домам для этого объекта ещё не добавлены.</div>`;
+    return;
+  }
+  buildings.forEach(b=>{
+    const bData = residentsCache[b.id] || {};
+    let occ=0, empt=0, ren=0;
+    for(let n=1;n<=b.count;n++){
+      const st = (bData[n] && bData[n].status) || "empty";
+      if(st==="occupied") occ++; else if(st==="renovation") ren++; else empt++;
+    }
+    const card = document.createElement("div");
+    card.className = "building-card";
+    card.innerHTML = `
+      <div class="building-head">
+        <b>${b.name}</b>
+        <span>${b.count} кв. · заселено ${occ} · пустует ${empt} · ремонт ${ren}</span>
+      </div>
+      <div class="apt-grid" id="apt-grid-${b.id}"></div>
+    `;
+    panel.appendChild(card);
+    const grid = card.querySelector(`#apt-grid-${b.id}`);
+    for(let n=1;n<=b.count;n++){
+      const st = (bData[n] && bData[n].status) || "empty";
+      const meta = APT_STATUS_META[st];
+      const cell = document.createElement("button");
+      cell.className = "apt-cell";
+      cell.style.background = meta.color;
+      cell.style.color = meta.text;
+      cell.textContent = n;
+      cell.title = `Кв. ${n} — ${meta.label}`;
+      cell.onclick = ()=> cycleAptStatus(b.id, n, cell);
+      grid.appendChild(cell);
+    }
+  });
+}
+
+function updateBuildingHeader(buildingId){
+  const b = BUILDINGS_DATA[state.objectId].find(x=>x.id===buildingId);
+  if(!b) return;
+  const bData = residentsCache[buildingId] || {};
+  let occ=0, empt=0, ren=0;
+  for(let n=1;n<=b.count;n++){
+    const st = (bData[n] && bData[n].status) || "empty";
+    if(st==="occupied") occ++; else if(st==="renovation") ren++; else empt++;
+  }
+  const grid = document.getElementById(`apt-grid-${buildingId}`);
+  if(!grid) return;
+  const span = grid.closest(".building-card").querySelector(".building-head span");
+  if(span) span.textContent = `${b.count} кв. · заселено ${occ} · пустует ${empt} · ремонт ${ren}`;
+}
+
+function cycleAptStatus(buildingId, aptNumber, cellEl){
+  if(!residentsCache[buildingId]) residentsCache[buildingId] = {};
+  const cur = (residentsCache[buildingId][aptNumber] && residentsCache[buildingId][aptNumber].status) || "empty";
+  const idx = APT_STATUS_CYCLE.indexOf(cur);
+  const next = APT_STATUS_CYCLE[(idx+1) % APT_STATUS_CYCLE.length];
+  const rec = {status: next, by: state.name, ts: Date.now()};
+  residentsCache[buildingId][aptNumber] = rec;
+  const meta = APT_STATUS_META[next];
+  cellEl.style.background = meta.color;
+  cellEl.style.color = meta.text;
+  cellEl.title = `Кв. ${aptNumber} — ${meta.label}`;
+  updateBuildingHeader(buildingId);
+  db.ref(`residents/${state.objectId}/${buildingId}/${aptNumber}`).set(rec).catch(err=>console.error("Save error", err));
+}
 
 function goCalendar(){
   const sectionLabel = isManager() ? " · " + currentRole().label : "";
