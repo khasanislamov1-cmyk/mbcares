@@ -961,9 +961,37 @@ function freqAnchorLabel(freq, dateObj){
     const anchorDay = dateObj.getDate() <= 15 ? 15 : lastDay;
     return `Раз в 15 дней (до ${anchorDay} числа)`;
   }
-  if(freq === "monthly") return `Раз в месяц (с 1 числа)`;
+  if(freq === "monthly") return `Раз в месяц (до 20 числа)`;
   return "";
 }
+/* The actual due-date (as a Date, day-only) for the cycle `dateObj` falls
+   into — this is when the task should be DONE by, not when the cycle
+   "opened". Biweekly due = 15 / last day of month. Monthly due = 20th. */
+function freqDueDate(freq, dateObj){
+  if(freq === "weekly") return parseDateKey(mondayKeyOf(dateObj));
+  if(freq === "twiceweekly"){
+    const monday = parseDateKey(mondayKeyOf(dateObj));
+    const dow = dateObj.getDay();
+    return (dow>=1 && dow<=3) ? monday : new Date(monday.getFullYear(), monday.getMonth(), monday.getDate()+3);
+  }
+  if(freq === "biweekly"){
+    const lastDay = new Date(dateObj.getFullYear(), dateObj.getMonth()+1, 0).getDate();
+    const due = dateObj.getDate() <= 15 ? 15 : lastDay;
+    return new Date(dateObj.getFullYear(), dateObj.getMonth(), due);
+  }
+  if(freq === "monthly") return new Date(dateObj.getFullYear(), dateObj.getMonth(), 20);
+  return null;
+}
+/* Don't nag every day — a periodic task only shows up starting on its due
+   date (and stays visible, carrying over, until marked done or the period
+   ends). Before the due date it's simply not shown at all. */
+function isFreqVisibleOnDate(freq, dateObj){
+  const due = freqDueDate(freq, dateObj);
+  if(!due) return true;
+  const d0 = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+  return d0 >= due;
+}
+
 
 /* ============================================================
    RESIDENTS — шахматка домов (не привязана к датам, живое состояние)
@@ -1260,18 +1288,21 @@ function renderCalendar(){
     grid.appendChild(el);
     applyDayStatus(key, el);
     fetchDayStatus(key, el);
-    if(effectiveRole() === "cleaning" && ACTIVE_FREQS.length){
+    if(effectiveRole() === "cleaning"){
       const dateObj = new Date(y, m, d);
-      const allDone = ACTIVE_FREQS.every(f => isFreqAllDoneOnDate(f, dateObj));
-      const marker = document.createElement("div");
-      marker.style.position = "absolute";
-      marker.style.top = "-4px"; marker.style.right = "-4px";
-      marker.style.width = "10px"; marker.style.height = "10px";
-      marker.style.borderRadius = "50%";
-      marker.style.background = allDone ? "#2E7D46" : "#C00000";
-      marker.style.border = "2px solid #fff";
-      marker.title = ACTIVE_FREQS.map(f=>freqAnchorLabel(f, dateObj)).join(" · ");
-      el.appendChild(marker);
+      const dueFreqs = ACTIVE_FREQS.filter(f => isFreqVisibleOnDate(f, dateObj));
+      if(dueFreqs.length){
+        const allDone = dueFreqs.every(f => isFreqAllDoneOnDate(f, dateObj));
+        const marker = document.createElement("div");
+        marker.style.position = "absolute";
+        marker.style.top = "-4px"; marker.style.right = "-4px";
+        marker.style.width = "10px"; marker.style.height = "10px";
+        marker.style.borderRadius = "50%";
+        marker.style.background = allDone ? "#2E7D46" : "#C00000";
+        marker.style.border = "2px solid #fff";
+        marker.title = dueFreqs.map(f=>freqAnchorLabel(f, dateObj)).join(" · ");
+        el.appendChild(marker);
+      }
     }
   }
 }
@@ -1806,10 +1837,15 @@ function renderDayPanel(){
     } else if(state.activeTab === "plan"){
       const intro = document.createElement("div");
       intro.style.cssText = "font-size:12.5px; color:var(--muted); margin-bottom:14px; padding:0 2px;";
-      intro.textContent = "Задачи не на каждый день — по графику 01-001 УБ. Отмечайте по мере выполнения; бейдж и точка в календаре показывают, что цикл ещё не закрыт.";
+      intro.textContent = "Показаны только задачи, которые уже должны быть сделаны к этой дате (по графику 01-001 УБ). Не отметили — остаётся видно и горит красным, пока не выполнят.";
       panel.appendChild(intro);
+      const planDateObj = parseDateKey(state.selectedDate);
+      let anyVisible = false;
       MAIN_SECTIONS.forEach((sec, si)=>{
-        if(SECTION_FREQ[si] === "daily") return; // only weekly/biweekly here
+        const freq = SECTION_FREQ[si];
+        if(freq === "daily") return; // daily items live on "Чек-лист контроля"
+        if(!isFreqVisibleOnDate(freq, planDateObj)) return; // not due yet — don't nag early
+        anyVisible = true;
         const secEl = document.createElement("div");
         secEl.className = "section";
         const head = document.createElement("div");
@@ -1818,6 +1854,12 @@ function renderDayPanel(){
         sec.items.forEach((text, ii)=> secEl.appendChild(itemRow("main", `s${si}_${ii}`, text)));
         panel.appendChild(secEl);
       });
+      if(!anyVisible){
+        const empty = document.createElement("div");
+        empty.style.cssText = "color:var(--muted); font-size:13px; padding:10px 2px;";
+        empty.textContent = "На эту дату плановых периодических работ нет — все сроки впереди.";
+        panel.appendChild(empty);
+      }
     } else {
       ["male","female"].forEach(gender=>{
         const secEl = document.createElement("div");
