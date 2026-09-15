@@ -240,6 +240,49 @@
     <div id="residentsPanel"></div>
   </div>
 
+  <!-- APARTMENT DETAIL CARD -->
+  <div class="view" id="view-apt-detail">
+    <div class="day-header">
+      <button class="back-btn" id="aptBackBtn">←</button>
+      <div>
+        <div class="day-title" id="aptTitle">Квартира —</div>
+        <div class="day-obj" id="aptSubtitle">—</div>
+      </div>
+    </div>
+
+    <div class="subhead">Статус</div>
+    <div class="seg" style="margin-bottom:18px;">
+      <button data-v="empty" id="aptStEmpty">Пустует</button>
+      <button data-v="occupied" id="aptStOccupied">Заселена</button>
+      <button data-v="renovation" id="aptStRenovation">Ремонт</button>
+    </div>
+
+    <div class="subhead">Житель</div>
+    <div class="field"><label>ФИО</label><input id="aptResidentName" type="text" placeholder="Фамилия Имя"></div>
+    <div class="field"><label>Телефон</label><input id="aptResidentPhone" type="tel" placeholder="+998 ..."></div>
+
+    <div id="aptRenovationBlock" style="display:none;">
+      <div class="subhead">Ремонтная бригада</div>
+      <div class="field"><label>Бригада / подрядчик</label><input id="aptBrigadeName" type="text" placeholder="Название или контактное лицо"></div>
+      <div class="field"><label>Количество рабочих</label><input id="aptBrigadeWorkers" type="number" min="0" placeholder="0"></div>
+      <div class="obj-item" id="aptRulesRow" style="cursor:pointer; margin-bottom:14px;">
+        <span>Ознакомлены с правилами ремонта</span>
+        <span id="aptRulesCheck">☐</span>
+      </div>
+    </div>
+
+    <div class="subhead">Фото паспорта</div>
+    <div class="field">
+      <input type="file" id="aptPassportFile" accept="image/*" style="margin-bottom:10px;">
+      <img id="aptPassportPreview" style="display:none; max-width:100%; border-radius:10px; border:1px solid var(--line);">
+    </div>
+
+    <div class="subhead">Заметка</div>
+    <div class="field"><textarea class="comment show" id="aptNotes" placeholder="Дополнительно..."></textarea></div>
+
+    <button class="primary-btn" id="aptSaveBtn" style="margin-top:6px;">Сохранить</button>
+  </div>
+
   <!-- CALENDAR -->
   <div class="view" id="view-calendar">
     <div class="tabs" id="calModeTabs" style="display:none;"></div>
@@ -846,7 +889,7 @@ function renderResidentsPanel(){
       cell.style.color = meta.text;
       cell.textContent = n;
       cell.title = `Кв. ${n} — ${meta.label}`;
-      cell.onclick = ()=> cycleAptStatus(b.id, n, cell);
+      cell.onclick = ()=> goAptDetail(b.id, n);
       grid.appendChild(cell);
     }
   });
@@ -881,6 +924,127 @@ function cycleAptStatus(buildingId, aptNumber, cellEl){
   updateBuildingHeader(buildingId);
   db.ref(`residents/${state.objectId}/${buildingId}/${aptNumber}`).set(rec).catch(err=>console.error("Save error", err));
 }
+
+/* ============================================================
+   APARTMENT DETAIL CARD
+   ============================================================ */
+let aptEdit = null; // {buildingId, aptNumber, draft:{...}}
+
+function goAptDetail(buildingId, aptNumber){
+  const building = BUILDINGS_DATA[state.objectId].find(b=>b.id===buildingId);
+  const existing = (residentsCache[buildingId] && residentsCache[buildingId][aptNumber]) || {};
+  aptEdit = {
+    buildingId, aptNumber,
+    draft: {
+      status: existing.status || "empty",
+      residentName: existing.residentName || "",
+      residentPhone: existing.residentPhone || "",
+      brigadeName: existing.brigadeName || "",
+      brigadeWorkers: existing.brigadeWorkers || "",
+      rulesAcknowledged: !!existing.rulesAcknowledged,
+      passportPhoto: existing.passportPhoto || "",
+      notes: existing.notes || "",
+    }
+  };
+  document.getElementById("aptTitle").textContent = `Квартира ${aptNumber}`;
+  document.getElementById("aptSubtitle").textContent = `${building.name} · ${objName(state.objectId)}`;
+  document.getElementById("aptResidentName").value = aptEdit.draft.residentName;
+  document.getElementById("aptResidentPhone").value = aptEdit.draft.residentPhone;
+  document.getElementById("aptBrigadeName").value = aptEdit.draft.brigadeName;
+  document.getElementById("aptBrigadeWorkers").value = aptEdit.draft.brigadeWorkers;
+  document.getElementById("aptNotes").value = aptEdit.draft.notes;
+  document.getElementById("aptRulesCheck").textContent = aptEdit.draft.rulesAcknowledged ? "☑" : "☐";
+  const preview = document.getElementById("aptPassportPreview");
+  if(aptEdit.draft.passportPhoto){ preview.src = aptEdit.draft.passportPhoto; preview.style.display = "block"; }
+  else { preview.src = ""; preview.style.display = "none"; }
+  document.getElementById("aptPassportFile").value = "";
+  applyAptStatusButtons();
+  showView("view-apt-detail");
+}
+
+function applyAptStatusButtons(){
+  ["empty","occupied","renovation"].forEach(s=>{
+    const btn = document.getElementById("aptSt" + s.charAt(0).toUpperCase() + s.slice(1));
+    btn.classList.remove("sel-ok","sel-warn","sel-bad");
+    if(aptEdit.draft.status === s){
+      btn.classList.add(s==="occupied" ? "sel-ok" : (s==="renovation" ? "sel-warn" : "sel-bad"));
+    }
+  });
+  document.getElementById("aptRenovationBlock").style.display = aptEdit.draft.status === "renovation" ? "block" : "none";
+}
+
+["aptStEmpty","aptStOccupied","aptStRenovation"].forEach(id=>{
+  document.getElementById(id).onclick = ()=>{
+    aptEdit.draft.status = document.getElementById(id).dataset.v;
+    applyAptStatusButtons();
+  };
+});
+
+document.getElementById("aptRulesRow").onclick = ()=>{
+  aptEdit.draft.rulesAcknowledged = !aptEdit.draft.rulesAcknowledged;
+  document.getElementById("aptRulesCheck").textContent = aptEdit.draft.rulesAcknowledged ? "☑" : "☐";
+};
+
+function compressImageFile(file, maxWidth, quality){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById("aptPassportFile").onchange = (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  compressImageFile(file, 900, 0.7).then(dataUrl=>{
+    aptEdit.draft.passportPhoto = dataUrl;
+    const preview = document.getElementById("aptPassportPreview");
+    preview.src = dataUrl;
+    preview.style.display = "block";
+  }).catch(()=>{
+    alert("Не удалось обработать фото. Попробуйте другое.");
+  });
+};
+
+document.getElementById("aptSaveBtn").onclick = ()=>{
+  const { buildingId, aptNumber } = aptEdit;
+  const rec = {
+    ...aptEdit.draft,
+    residentName: document.getElementById("aptResidentName").value.trim(),
+    residentPhone: document.getElementById("aptResidentPhone").value.trim(),
+    brigadeName: document.getElementById("aptBrigadeName").value.trim(),
+    brigadeWorkers: document.getElementById("aptBrigadeWorkers").value.trim(),
+    notes: document.getElementById("aptNotes").value.trim(),
+    by: state.name, ts: Date.now()
+  };
+  if(!residentsCache[buildingId]) residentsCache[buildingId] = {};
+  residentsCache[buildingId][aptNumber] = rec;
+  db.ref(`residents/${state.objectId}/${buildingId}/${aptNumber}`).set(rec).then(()=>{
+    flashSaved();
+    renderResidentsPanel();
+    showView("view-residents");
+  }).catch(err=>{
+    alert("Не удалось сохранить: " + err.message);
+  });
+};
+
+document.getElementById("aptBackBtn").onclick = ()=>{
+  showView("view-residents");
+};
 
 function goCalendar(){
   const sectionLabel = isManager() ? " · " + currentRole().label : "";
