@@ -196,8 +196,19 @@
     </div>
     <div class="subhead">Объект (ЖК)</div>
     <div class="obj-list" id="objList"></div>
-    <div class="subhead" id="sectionSubhead" style="display:none;">Чек-лист</div>
-    <div class="obj-list" id="sectionList" style="display:none; margin-bottom:6px;"></div>
+  </div>
+
+  <!-- SECTION SELECT (manager only, after object is chosen) -->
+  <div class="view" id="view-section">
+    <div class="day-header">
+      <button class="back-btn" id="sectionBackBtn">←</button>
+      <div>
+        <div class="day-title" id="sectionObjTitle">—</div>
+        <div class="day-obj">Выберите чек-лист</div>
+      </div>
+    </div>
+    <div class="subhead">Чек-лист</div>
+    <div class="obj-list" id="sectionList"></div>
   </div>
 
   <!-- CALENDAR -->
@@ -554,11 +565,13 @@ function goObjectSelect(){
   document.getElementById("topSub").textContent = state.name;
   document.getElementById("whoName").textContent = state.name;
   document.getElementById("whoRole").textContent = isManager() ? "Менеджер (просмотр и правки)" : currentRole().label;
-  // require the object → checklist chain to be reconfirmed each time this screen opens
-  document.getElementById("sectionSubhead").style.display = "none";
-  document.getElementById("sectionList").style.display = "none";
   renderObjectList();
   showView("view-object");
+}
+function goSectionSelect(){
+  document.getElementById("sectionObjTitle").textContent = objName(state.objectId);
+  renderSectionList();
+  showView("view-section");
 }
 function renderSectionList(){
   const wrap = document.getElementById("sectionList");
@@ -566,8 +579,7 @@ function renderSectionList(){
   Object.values(ROLES).forEach(r=>{
     const el = document.createElement("div");
     el.className = "obj-item";
-    el.innerHTML = `<span>${r.label}</span><span>${state.viewRole===r.id?"✓":"›"}</span>`;
-    if(state.viewRole===r.id) el.style.outline = "2px solid var(--accent)";
+    el.innerHTML = `<span>${r.label}</span><span>›</span>`;
     el.onclick = ()=>{ state.viewRole = r.id; applyAccent(); goCalendar(); };
     wrap.appendChild(el);
   });
@@ -578,15 +590,11 @@ function renderObjectList(){
   OBJECTS.forEach(o=>{
     const el = document.createElement("div");
     el.className = "obj-item";
-    el.innerHTML = `<span>${o.name}</span><span>${state.objectId===o.id?"✓":"›"}</span>`;
-    if(state.objectId===o.id) el.style.outline = "2px solid var(--accent)";
+    el.innerHTML = `<span>${o.name}</span><span>›</span>`;
     el.onclick = ()=>{
       state.objectId = o.id;
       if(isManager()){
-        renderObjectList();
-        document.getElementById("sectionSubhead").style.display = "block";
-        document.getElementById("sectionList").style.display = "flex";
-        renderSectionList();
+        goSectionSelect();
       } else {
         goCalendar();
       }
@@ -595,6 +603,9 @@ function renderObjectList(){
   });
 }
 document.getElementById("switchBtn").onclick = ()=>{
+  goObjectSelect();
+};
+document.getElementById("sectionBackBtn").onclick = ()=>{
   goObjectSelect();
 };
 
