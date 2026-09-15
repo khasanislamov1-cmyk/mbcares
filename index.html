@@ -374,7 +374,11 @@ const db = firebase.database();
 const ROLES = {
   cleaning: {
     id:"cleaning", label:"Уборка", dbRoot:"checklists", accent:"#4472C4",
-    tabs:[{id:"main", label:"Чек-лист контроля"}, {id:"express", label:"Туалеты (экспресс)"}],
+    tabs:[
+      {id:"main", label:"Чек-лист контроля", storageGroup:"main"},
+      {id:"plan", label:"План уборки", storageGroup:"main"},
+      {id:"express", label:"Туалеты (экспресс)", storageGroup:"express"},
+    ],
     hasTimeField:false
   },
   security: {
@@ -745,6 +749,13 @@ function isEditable(){ return isManager() || state.selectedDate === todayKey(); 
    shape and crashes when writing. */
 function scopeKey(dateKey){ return `${effectiveRole()}|${state.objectId}|${dateKey}`; }
 function tabLabel(tabId){ const t=currentRole().tabs.find(t=>t.id===tabId); return t?t.label:tabId; }
+/* Some tabs (e.g. cleaning's "План уборки") are just a filtered view over
+   the same underlying data group as another tab — this resolves to the
+   actual storage key so progress/save logic keeps working correctly. */
+function activeStorageGroup(){
+  const t = currentRole().tabs.find(t=>t.id===state.activeTab);
+  return (t && t.storageGroup) || state.activeTab;
+}
 
 function applyAccent(){
   const accent = state.role ? ROLES[effectiveRole()].accent : "#4472C4";
@@ -1501,7 +1512,7 @@ function loadDay(key){
   if(state.cache[sk]) return Promise.resolve(state.cache[sk]);
   return db.ref(`${currentRole().dbRoot}/${state.objectId}/${key}`).once("value").then(snap=>{
     const data = snap.val() || {};
-    currentRole().tabs.forEach(t=>{ if(!data[t.id]) data[t.id] = {}; });
+    currentRole().tabs.forEach(t=>{ const g = t.storageGroup || t.id; if(!data[g]) data[g] = {}; });
     state.cache[sk] = data;
     return data;
   });
@@ -1748,11 +1759,11 @@ function renderDayPanel(){
   if(roleObj.hasTimeField){
     document.getElementById("timeLabel").textContent = `Фактическое время обхода (план ${tabLabel(state.activeTab)})`;
     const timeInput = document.getElementById("actualTime");
-    const meta = getVal(state.activeTab, "_meta") || {};
+    const meta = getVal(activeStorageGroup(), "_meta") || {};
     timeInput.value = meta.actualTime || "";
     timeInput.disabled = !isEditable();
     timeInput.oninput = !isEditable() ? null : ()=>{
-      setVal(state.activeTab, "_meta", {actualTime:timeInput.value, by:state.name, ts:Date.now()});
+      setVal(activeStorageGroup(), "_meta", {actualTime:timeInput.value, by:state.name, ts:Date.now()});
       queueSave();
     };
   }
@@ -1760,6 +1771,22 @@ function renderDayPanel(){
   if(roleObj.id === "cleaning"){
     if(state.activeTab === "main"){
       MAIN_SECTIONS.forEach((sec, si)=>{
+        if(SECTION_FREQ[si] !== "daily") return; // periodic items live on the "План уборки" tab
+        const secEl = document.createElement("div");
+        secEl.className = "section";
+        const head = document.createElement("div");
+        head.className = "section-head"; head.textContent = sec.title;
+        secEl.appendChild(head);
+        sec.items.forEach((text, ii)=> secEl.appendChild(itemRow("main", `s${si}_${ii}`, text)));
+        panel.appendChild(secEl);
+      });
+    } else if(state.activeTab === "plan"){
+      const intro = document.createElement("div");
+      intro.style.cssText = "font-size:12.5px; color:var(--muted); margin-bottom:14px; padding:0 2px;";
+      intro.textContent = "Задачи не на каждый день — по графику 01-001 УБ. Отмечайте по мере выполнения; бейдж и точка в календаре показывают, что цикл ещё не закрыт.";
+      panel.appendChild(intro);
+      MAIN_SECTIONS.forEach((sec, si)=>{
+        if(SECTION_FREQ[si] === "daily") return; // only weekly/biweekly here
         const secEl = document.createElement("div");
         secEl.className = "section";
         const head = document.createElement("div");
@@ -1820,7 +1847,7 @@ function renderDayPanel(){
 function updateProgress(){
   const roleObj = currentRole();
   let total=0, filled=0;
-  const data = state.cache[scopeKey(state.selectedDate)][state.activeTab] || {};
+  const data = state.cache[scopeKey(state.selectedDate)][activeStorageGroup()] || {};
   Object.entries(data).forEach(([k,v])=>{
     if(k==="_meta") return;
     if(v && typeof v==="object" && "status" in v){ total++; if(v.status) filled++; }
