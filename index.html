@@ -377,7 +377,10 @@ const ROLES = {
     tabs:[
       {id:"main", label:"Чек-лист контроля", storageGroup:"main"},
       {id:"plan", label:"План уборки", storageGroup:"main"},
-      {id:"express", label:"Туалеты (экспресс)", storageGroup:"express"},
+      {id:"t1000", label:"10:00", storageGroup:"t1000"},
+      {id:"t1200", label:"12:00", storageGroup:"t1200"},
+      {id:"t1400", label:"14:00", storageGroup:"t1400"},
+      {id:"t1600", label:"16:00", storageGroup:"t1600"},
     ],
     hasTimeField:false
   },
@@ -644,6 +647,8 @@ const EXPRESS_POINTS = [
   "Освежитель воздуха — работает",
   "Общий запах — нормальный",
 ];
+/* Санузлы, проверяемые каждые 2 часа (10:00 / 12:00 / 14:00 / 16:00) */
+const TOILET_LOCATIONS = ["Гостевой санузел", "Тренажёрный зал", "Детская зона"];
 
 /* ============================================================
    SECURITY DATA
@@ -1399,10 +1404,13 @@ function resolveItemText(effRole, group, path){
         const sec = MAIN_SECTIONS[+m[1]];
         if(sec) return {section: sec.title, text: sec.items[+m[2]]};
       }
-    } else if(group === "express"){
-      if(path === "forma") return {section:"Форма уборщицы", text:"Форма заполнена и подписана?"};
-      const m = path.match(/^(male|female)_(\d+)$/);
-      if(m) return {section: m[1]==="male"?"Мужская уборная":"Женская уборная", text: EXPRESS_POINTS[+m[2]]};
+    } else if(/^t(1000|1200|1400|1600)$/.test(group)){
+      const roundLabel = group.replace("t","").replace(/(\d{2})(\d{2})/,"$1:$2");
+      const m = path.match(/^(\d+)_(\d+)$/);
+      if(m){
+        const loc = TOILET_LOCATIONS[+m[1]];
+        if(loc) return {section: `${loc} · ${roundLabel}`, text: EXPRESS_POINTS[+m[2]]};
+      }
     }
   } else if(effRole === "technician"){
     const m = path.match(/^t(\d+)$/);
@@ -1861,21 +1869,17 @@ function renderDayPanel(){
         panel.appendChild(empty);
       }
     } else {
-      ["male","female"].forEach(gender=>{
+      // Toilet round tabs (10:00 / 12:00 / 14:00 / 16:00) — each covers all locations
+      TOILET_LOCATIONS.forEach((locName, li)=>{
         const secEl = document.createElement("div");
         secEl.className = "section";
         const head = document.createElement("div");
         head.className = "section-head";
-        head.textContent = gender==="male" ? "Мужская уборная" : "Женская уборная";
+        head.textContent = locName;
         secEl.appendChild(head);
-        EXPRESS_POINTS.forEach((text, ii)=> secEl.appendChild(itemRow("express", `${gender}_${ii}`, text)));
+        EXPRESS_POINTS.forEach((text, ii)=> secEl.appendChild(itemRow(activeStorageGroup(), `${li}_${ii}`, text)));
         panel.appendChild(secEl);
       });
-      const secEl = document.createElement("div");
-      secEl.className = "section";
-      secEl.innerHTML = `<div class="section-head">Форма уборщицы (каждые 2 ч.)</div>`;
-      secEl.appendChild(itemRow("express", "forma", "Форма заполнена и подписана?", {binary:true}));
-      panel.appendChild(secEl);
     }
   } else if(roleObj.id === "technician"){
     const secEl = document.createElement("div");
