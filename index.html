@@ -494,10 +494,11 @@ const TECH_TASKS_BY_OBJECT = {
 /* Objects where the technician does one full route per WEEK (not daily) —
    the checklist only shows up on that specific weekday.
    JS Date.getDay(): Пн=1, Вт=2, Ср=3, Чт=4, Пт=5, Сб=6, Вс=0 */
-const TECH_WEEKLY_META = {
-  "dostlar": {dow:3, dayName:"среда"},
-  "felichita": {dow:5, dayName:"пятница"},
-};
+/* Раньше здесь было ограничение "раз в неделю" для Дустлара/Феличита —
+   теперь по просьбе чек-лист доступен каждый день, как у остальных
+   объектов. Оставлено пустым, а не удалено — можно вернуть для
+   конкретного объекта, просто добавив запись сюда. */
+const TECH_WEEKLY_META = {};
 /* Fallback for objects that don't have their own tech schedule yet */
 function getTechTasks(objectId){ return TECH_TASKS_BY_OBJECT[objectId] || []; }
 
